@@ -4,13 +4,16 @@
 
 use axum::{
     middleware,
+    response::IntoResponse,
     routing::{delete, get, patch, post},
     Router,
 };
 
 use super::handlers;
+use crate::infrastructure::metrics;
 use crate::presentation::middleware::{
-    auth_middleware, rate_limit_api, rate_limit_auth, rate_limit_websocket,
+    auth_middleware, create_security_headers_layer, rate_limit_api, rate_limit_auth,
+    rate_limit_websocket,
 };
 use crate::presentation::websocket::ws_handler;
 use crate::startup::AppState;
@@ -25,8 +28,28 @@ pub fn create_router(state: AppState) -> Router {
             state.clone(),
             rate_limit_websocket,
         ))
+        // Health check endpoints
         .route("/health", get(handlers::health::health_check))
+        .route("/health/live", get(handlers::health::liveness))
+        .route("/health/ready", get(handlers::health::readiness))
+        // Prometheus metrics endpoint
+        .route("/metrics", get(metrics_handler))
+        // Apply security headers globally to all responses
+        // This layer runs last (outermost) so headers are added to all responses
+        .layer(create_security_headers_layer())
         .with_state(state)
+}
+
+/// Prometheus metrics endpoint handler
+async fn metrics_handler() -> impl IntoResponse {
+    let metrics = metrics::gather_metrics();
+    (
+        [(
+            axum::http::header::CONTENT_TYPE,
+            "text/plain; version=0.0.4; charset=utf-8",
+        )],
+        metrics,
+    )
 }
 
 /// API v1 routes

@@ -200,3 +200,395 @@ pub trait RoleRepository: Send + Sync {
     /// Get the highest role position for a server (for new role creation).
     async fn get_max_position(&self, server_id: i64) -> Result<i32, AppError>;
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // ==========================================================================
+    // Role Entity Tests
+    // ==========================================================================
+
+    fn create_test_role() -> Role {
+        Role {
+            id: 12345678901234567,
+            server_id: 100,
+            name: "Test Role".to_string(),
+            permissions: 0,
+            position: 1,
+            color: None,
+            hoist: false,
+            mentionable: false,
+            created_at: Utc::now(),
+            updated_at: Utc::now(),
+        }
+    }
+
+    #[test]
+    fn test_role_default() {
+        let role = Role::default();
+
+        assert_eq!(role.id, 0);
+        assert_eq!(role.server_id, 0);
+        assert_eq!(role.name, "new role");
+        assert_eq!(role.permissions, 0);
+        assert_eq!(role.position, 0);
+        assert!(role.color.is_none());
+        assert!(!role.hoist);
+        assert!(!role.mentionable);
+    }
+
+    // ==========================================================================
+    // has_permission Tests
+    // ==========================================================================
+
+    #[test]
+    fn test_role_has_permission_true_when_set() {
+        let mut role = create_test_role();
+        role.permissions = permissions::VIEW_CHANNEL;
+
+        assert!(role.has_permission(permissions::VIEW_CHANNEL));
+    }
+
+    #[test]
+    fn test_role_has_permission_false_when_not_set() {
+        let role = create_test_role();
+
+        assert!(!role.has_permission(permissions::VIEW_CHANNEL));
+        assert!(!role.has_permission(permissions::SEND_MESSAGES));
+    }
+
+    #[test]
+    fn test_role_has_permission_multiple() {
+        let mut role = create_test_role();
+        role.permissions = permissions::VIEW_CHANNEL | permissions::SEND_MESSAGES;
+
+        assert!(role.has_permission(permissions::VIEW_CHANNEL));
+        assert!(role.has_permission(permissions::SEND_MESSAGES));
+        assert!(!role.has_permission(permissions::MANAGE_MESSAGES));
+    }
+
+    #[test]
+    fn test_role_has_permission_combined_check() {
+        let mut role = create_test_role();
+        role.permissions = permissions::VIEW_CHANNEL | permissions::SEND_MESSAGES;
+
+        let required = permissions::VIEW_CHANNEL | permissions::SEND_MESSAGES;
+        assert!(role.has_permission(required));
+
+        let too_many = permissions::VIEW_CHANNEL | permissions::ADMINISTRATOR;
+        assert!(!role.has_permission(too_many));
+    }
+
+    // ==========================================================================
+    // Administrator Override Tests
+    // ==========================================================================
+
+    #[test]
+    fn test_role_admin_has_all_permissions() {
+        let mut role = create_test_role();
+        role.permissions = permissions::ADMINISTRATOR;
+
+        // Admin should have all permissions via has_permission
+        assert!(role.has_permission(permissions::VIEW_CHANNEL));
+        assert!(role.has_permission(permissions::SEND_MESSAGES));
+        assert!(role.has_permission(permissions::MANAGE_GUILD));
+        assert!(role.has_permission(permissions::BAN_MEMBERS));
+        assert!(role.has_permission(permissions::MANAGE_ROLES));
+    }
+
+    #[test]
+    fn test_role_is_admin_true() {
+        let mut role = create_test_role();
+        role.permissions = permissions::ADMINISTRATOR;
+
+        assert!(role.is_admin());
+    }
+
+    #[test]
+    fn test_role_is_admin_false() {
+        let mut role = create_test_role();
+        role.permissions = permissions::MANAGE_GUILD | permissions::BAN_MEMBERS;
+
+        assert!(!role.is_admin());
+    }
+
+    // ==========================================================================
+    // Color Tests
+    // ==========================================================================
+
+    #[test]
+    fn test_role_color_rgb_none_when_no_color() {
+        let role = create_test_role();
+        assert!(role.color_rgb().is_none());
+    }
+
+    #[test]
+    fn test_role_color_rgb_extracts_components() {
+        let mut role = create_test_role();
+        // 0xFF5733 = RGB(255, 87, 51)
+        role.color = Some(0xFF5733);
+
+        let (r, g, b) = role.color_rgb().expect("Expected color");
+        assert_eq!(r, 255);
+        assert_eq!(g, 87);
+        assert_eq!(b, 51);
+    }
+
+    #[test]
+    fn test_role_color_rgb_pure_red() {
+        let mut role = create_test_role();
+        role.color = Some(0xFF0000);
+
+        let (r, g, b) = role.color_rgb().expect("Expected color");
+        assert_eq!(r, 255);
+        assert_eq!(g, 0);
+        assert_eq!(b, 0);
+    }
+
+    #[test]
+    fn test_role_color_rgb_pure_green() {
+        let mut role = create_test_role();
+        role.color = Some(0x00FF00);
+
+        let (r, g, b) = role.color_rgb().expect("Expected color");
+        assert_eq!(r, 0);
+        assert_eq!(g, 255);
+        assert_eq!(b, 0);
+    }
+
+    #[test]
+    fn test_role_color_rgb_pure_blue() {
+        let mut role = create_test_role();
+        role.color = Some(0x0000FF);
+
+        let (r, g, b) = role.color_rgb().expect("Expected color");
+        assert_eq!(r, 0);
+        assert_eq!(g, 0);
+        assert_eq!(b, 255);
+    }
+
+    #[test]
+    fn test_role_color_rgb_black() {
+        let mut role = create_test_role();
+        role.color = Some(0x000000);
+
+        let (r, g, b) = role.color_rgb().expect("Expected color");
+        assert_eq!(r, 0);
+        assert_eq!(g, 0);
+        assert_eq!(b, 0);
+    }
+
+    #[test]
+    fn test_role_color_rgb_white() {
+        let mut role = create_test_role();
+        role.color = Some(0xFFFFFF);
+
+        let (r, g, b) = role.color_rgb().expect("Expected color");
+        assert_eq!(r, 255);
+        assert_eq!(g, 255);
+        assert_eq!(b, 255);
+    }
+
+    #[test]
+    fn test_role_color_hex_none_when_no_color() {
+        let role = create_test_role();
+        assert!(role.color_hex().is_none());
+    }
+
+    #[test]
+    fn test_role_color_hex_format() {
+        let mut role = create_test_role();
+        role.color = Some(0xFF5733);
+
+        let hex = role.color_hex().expect("Expected color");
+        assert_eq!(hex, "#FF5733");
+    }
+
+    #[test]
+    fn test_role_color_hex_with_leading_zeros() {
+        let mut role = create_test_role();
+        role.color = Some(0x00FF00);
+
+        let hex = role.color_hex().expect("Expected color");
+        assert_eq!(hex, "#00FF00");
+    }
+
+    #[test]
+    fn test_role_color_hex_black() {
+        let mut role = create_test_role();
+        role.color = Some(0x000000);
+
+        let hex = role.color_hex().expect("Expected color");
+        assert_eq!(hex, "#000000");
+    }
+
+    // ==========================================================================
+    // Permission Constants Tests
+    // ==========================================================================
+
+    #[test]
+    fn test_permission_constant_values() {
+        assert_eq!(permissions::CREATE_INSTANT_INVITE, 1 << 0);
+        assert_eq!(permissions::KICK_MEMBERS, 1 << 1);
+        assert_eq!(permissions::BAN_MEMBERS, 1 << 2);
+        assert_eq!(permissions::ADMINISTRATOR, 1 << 3);
+        assert_eq!(permissions::MANAGE_CHANNELS, 1 << 4);
+        assert_eq!(permissions::MANAGE_GUILD, 1 << 5);
+        assert_eq!(permissions::ADD_REACTIONS, 1 << 6);
+        assert_eq!(permissions::VIEW_AUDIT_LOG, 1 << 7);
+        assert_eq!(permissions::PRIORITY_SPEAKER, 1 << 8);
+        assert_eq!(permissions::STREAM, 1 << 9);
+        assert_eq!(permissions::VIEW_CHANNEL, 1 << 10);
+        assert_eq!(permissions::SEND_MESSAGES, 1 << 11);
+        assert_eq!(permissions::SEND_TTS_MESSAGES, 1 << 12);
+        assert_eq!(permissions::MANAGE_MESSAGES, 1 << 13);
+        assert_eq!(permissions::EMBED_LINKS, 1 << 14);
+        assert_eq!(permissions::ATTACH_FILES, 1 << 15);
+        assert_eq!(permissions::READ_MESSAGE_HISTORY, 1 << 16);
+        assert_eq!(permissions::MENTION_EVERYONE, 1 << 17);
+        assert_eq!(permissions::USE_EXTERNAL_EMOJIS, 1 << 18);
+        assert_eq!(permissions::VIEW_GUILD_INSIGHTS, 1 << 19);
+        assert_eq!(permissions::CONNECT, 1 << 20);
+        assert_eq!(permissions::SPEAK, 1 << 21);
+        assert_eq!(permissions::MUTE_MEMBERS, 1 << 22);
+        assert_eq!(permissions::DEAFEN_MEMBERS, 1 << 23);
+        assert_eq!(permissions::MOVE_MEMBERS, 1 << 24);
+        assert_eq!(permissions::USE_VAD, 1 << 25);
+        assert_eq!(permissions::CHANGE_NICKNAME, 1 << 26);
+        assert_eq!(permissions::MANAGE_NICKNAMES, 1 << 27);
+        assert_eq!(permissions::MANAGE_ROLES, 1 << 28);
+        assert_eq!(permissions::MANAGE_WEBHOOKS, 1 << 29);
+        assert_eq!(permissions::MANAGE_EMOJIS_AND_STICKERS, 1 << 30);
+    }
+
+    // ==========================================================================
+    // Role Position Tests
+    // ==========================================================================
+
+    #[test]
+    fn test_role_position_default_zero() {
+        let role = Role::default();
+        assert_eq!(role.position, 0);
+    }
+
+    #[test]
+    fn test_role_position_ordering() {
+        let mut roles = vec![
+            {
+                let mut r = create_test_role();
+                r.position = 2;
+                r.name = "role-c".to_string();
+                r
+            },
+            {
+                let mut r = create_test_role();
+                r.position = 0;
+                r.name = "role-a".to_string();
+                r
+            },
+            {
+                let mut r = create_test_role();
+                r.position = 1;
+                r.name = "role-b".to_string();
+                r
+            },
+        ];
+
+        roles.sort_by_key(|r| r.position);
+
+        assert_eq!(roles[0].name, "role-a");
+        assert_eq!(roles[1].name, "role-b");
+        assert_eq!(roles[2].name, "role-c");
+    }
+
+    // ==========================================================================
+    // Role Hoist Tests
+    // ==========================================================================
+
+    #[test]
+    fn test_role_hoist_default_false() {
+        let role = create_test_role();
+        assert!(!role.hoist);
+    }
+
+    #[test]
+    fn test_role_hoist_can_be_set() {
+        let mut role = create_test_role();
+        role.hoist = true;
+        assert!(role.hoist);
+    }
+
+    // ==========================================================================
+    // Role Mentionable Tests
+    // ==========================================================================
+
+    #[test]
+    fn test_role_mentionable_default_false() {
+        let role = create_test_role();
+        assert!(!role.mentionable);
+    }
+
+    #[test]
+    fn test_role_mentionable_can_be_set() {
+        let mut role = create_test_role();
+        role.mentionable = true;
+        assert!(role.mentionable);
+    }
+
+    // ==========================================================================
+    // Role Clone Tests
+    // ==========================================================================
+
+    #[test]
+    fn test_role_clone() {
+        let mut role = create_test_role();
+        role.permissions = permissions::VIEW_CHANNEL | permissions::SEND_MESSAGES;
+        role.color = Some(0xFF5733);
+
+        let cloned = role.clone();
+
+        assert_eq!(role.id, cloned.id);
+        assert_eq!(role.server_id, cloned.server_id);
+        assert_eq!(role.name, cloned.name);
+        assert_eq!(role.permissions, cloned.permissions);
+        assert_eq!(role.position, cloned.position);
+        assert_eq!(role.color, cloned.color);
+        assert_eq!(role.hoist, cloned.hoist);
+        assert_eq!(role.mentionable, cloned.mentionable);
+    }
+
+    // ==========================================================================
+    // Role Serialization Tests
+    // ==========================================================================
+
+    #[test]
+    fn test_role_serialization() {
+        let mut role = create_test_role();
+        role.color = Some(0xFF5733);
+        role.hoist = true;
+
+        let serialized = serde_json::to_string(&role).expect("Failed to serialize role");
+
+        assert!(serialized.contains("\"id\":12345678901234567"));
+        assert!(serialized.contains("\"server_id\":100"));
+        assert!(serialized.contains("\"name\":\"Test Role\""));
+        assert!(serialized.contains("\"hoist\":true"));
+    }
+
+    // ==========================================================================
+    // Everyone Role Tests
+    // ==========================================================================
+
+    #[test]
+    fn test_everyone_role_has_same_id_as_server() {
+        // In Discord, the @everyone role has the same ID as the server
+        let server_id = 100_i64;
+        let mut everyone_role = create_test_role();
+        everyone_role.id = server_id;
+        everyone_role.server_id = server_id;
+        everyone_role.name = "@everyone".to_string();
+
+        assert_eq!(everyone_role.id, everyone_role.server_id);
+    }
+}

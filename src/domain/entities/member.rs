@@ -141,3 +141,308 @@ pub trait MemberRepository: Send + Sync {
     /// Find members with a specific role.
     async fn find_by_role(&self, server_id: i64, role_id: i64) -> Result<Vec<Member>, AppError>;
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // ==========================================================================
+    // Member Entity Tests
+    // ==========================================================================
+
+    fn create_test_member() -> Member {
+        Member {
+            server_id: 100,
+            user_id: 200,
+            nickname: None,
+            joined_at: Utc::now(),
+            roles: Vec::new(),
+        }
+    }
+
+    #[test]
+    fn test_member_default() {
+        let member = Member::default();
+
+        assert_eq!(member.server_id, 0);
+        assert_eq!(member.user_id, 0);
+        assert!(member.nickname.is_none());
+        assert!(member.roles.is_empty());
+    }
+
+    #[test]
+    fn test_member_new() {
+        let member = Member::new(100, 200);
+
+        assert_eq!(member.server_id, 100);
+        assert_eq!(member.user_id, 200);
+        assert!(member.nickname.is_none());
+        assert!(member.roles.is_empty());
+    }
+
+    // ==========================================================================
+    // has_role Tests
+    // ==========================================================================
+
+    #[test]
+    fn test_member_has_role_true_when_present() {
+        let mut member = create_test_member();
+        member.roles = vec![101, 102, 103];
+
+        assert!(member.has_role(101));
+        assert!(member.has_role(102));
+        assert!(member.has_role(103));
+    }
+
+    #[test]
+    fn test_member_has_role_false_when_absent() {
+        let mut member = create_test_member();
+        member.roles = vec![101, 102];
+
+        assert!(!member.has_role(103));
+        assert!(!member.has_role(999));
+    }
+
+    #[test]
+    fn test_member_has_role_empty_roles() {
+        let member = create_test_member();
+
+        assert!(!member.has_role(101));
+    }
+
+    // ==========================================================================
+    // display_name Tests
+    // ==========================================================================
+
+    #[test]
+    fn test_member_display_name_returns_nickname_when_set() {
+        let mut member = create_test_member();
+        member.nickname = Some("Cool Nickname".to_string());
+
+        assert_eq!(member.display_name("username"), "Cool Nickname");
+    }
+
+    #[test]
+    fn test_member_display_name_returns_username_when_no_nickname() {
+        let member = create_test_member();
+
+        assert_eq!(member.display_name("username"), "username");
+    }
+
+    #[test]
+    fn test_member_display_name_returns_empty_nickname_when_set_to_empty() {
+        let mut member = create_test_member();
+        member.nickname = Some("".to_string());
+
+        // When nickname is Some(""), returns the empty string
+        assert_eq!(member.display_name("username"), "");
+    }
+
+    // ==========================================================================
+    // Member Nickname Tests
+    // ==========================================================================
+
+    #[test]
+    fn test_member_nickname_none_by_default() {
+        let member = create_test_member();
+        assert!(member.nickname.is_none());
+    }
+
+    #[test]
+    fn test_member_nickname_can_be_set() {
+        let mut member = create_test_member();
+        member.nickname = Some("Server Nickname".to_string());
+
+        assert_eq!(member.nickname, Some("Server Nickname".to_string()));
+    }
+
+    // ==========================================================================
+    // Member Roles Tests
+    // ==========================================================================
+
+    #[test]
+    fn test_member_roles_empty_by_default() {
+        let member = create_test_member();
+        assert!(member.roles.is_empty());
+    }
+
+    #[test]
+    fn test_member_roles_can_be_added() {
+        let mut member = create_test_member();
+        member.roles.push(101);
+        member.roles.push(102);
+
+        assert_eq!(member.roles.len(), 2);
+        assert!(member.has_role(101));
+        assert!(member.has_role(102));
+    }
+
+    #[test]
+    fn test_member_roles_can_be_removed() {
+        let mut member = create_test_member();
+        member.roles = vec![101, 102, 103];
+
+        member.roles.retain(|&r| r != 102);
+
+        assert_eq!(member.roles.len(), 2);
+        assert!(member.has_role(101));
+        assert!(!member.has_role(102));
+        assert!(member.has_role(103));
+    }
+
+    // ==========================================================================
+    // Member Clone Tests
+    // ==========================================================================
+
+    #[test]
+    fn test_member_clone() {
+        let mut member = create_test_member();
+        member.nickname = Some("Nickname".to_string());
+        member.roles = vec![101, 102];
+
+        let cloned = member.clone();
+
+        assert_eq!(member.server_id, cloned.server_id);
+        assert_eq!(member.user_id, cloned.user_id);
+        assert_eq!(member.nickname, cloned.nickname);
+        assert_eq!(member.roles, cloned.roles);
+    }
+
+    // ==========================================================================
+    // Member Serialization Tests
+    // ==========================================================================
+
+    #[test]
+    fn test_member_serialization() {
+        let mut member = create_test_member();
+        member.nickname = Some("Test Nick".to_string());
+        member.roles = vec![101, 102];
+
+        let serialized = serde_json::to_string(&member).expect("Failed to serialize member");
+
+        assert!(serialized.contains("\"server_id\":100"));
+        assert!(serialized.contains("\"user_id\":200"));
+        assert!(serialized.contains("\"nickname\":\"Test Nick\""));
+        assert!(serialized.contains("\"roles\":[101,102]"));
+    }
+
+    #[test]
+    fn test_member_serialization_empty_roles_default() {
+        let member = create_test_member();
+
+        let serialized = serde_json::to_string(&member).expect("Failed to serialize member");
+
+        // roles should be an empty array
+        assert!(serialized.contains("\"roles\":[]"));
+    }
+
+    // ==========================================================================
+    // MemberRole Tests
+    // ==========================================================================
+
+    #[test]
+    fn test_member_role_creation() {
+        let member_role = MemberRole {
+            server_id: 100,
+            user_id: 200,
+            role_id: 300,
+        };
+
+        assert_eq!(member_role.server_id, 100);
+        assert_eq!(member_role.user_id, 200);
+        assert_eq!(member_role.role_id, 300);
+    }
+
+    #[test]
+    fn test_member_role_clone() {
+        let member_role = MemberRole {
+            server_id: 100,
+            user_id: 200,
+            role_id: 300,
+        };
+
+        let cloned = member_role.clone();
+
+        assert_eq!(member_role.server_id, cloned.server_id);
+        assert_eq!(member_role.user_id, cloned.user_id);
+        assert_eq!(member_role.role_id, cloned.role_id);
+    }
+
+    // ==========================================================================
+    // Member Composite Key Tests
+    // ==========================================================================
+
+    #[test]
+    fn test_member_composite_key() {
+        // Member is uniquely identified by (server_id, user_id)
+        let member1 = Member::new(100, 200);
+        let member2 = Member::new(100, 201); // Different user
+        let member3 = Member::new(101, 200); // Different server
+
+        // All three are distinct members
+        assert_ne!((member1.server_id, member1.user_id), (member2.server_id, member2.user_id));
+        assert_ne!((member1.server_id, member1.user_id), (member3.server_id, member3.user_id));
+        assert_ne!((member2.server_id, member2.user_id), (member3.server_id, member3.user_id));
+    }
+
+    // ==========================================================================
+    // Member Join Time Tests
+    // ==========================================================================
+
+    #[test]
+    fn test_member_joined_at_is_set() {
+        let before = Utc::now();
+        let member = Member::new(100, 200);
+        let after = Utc::now();
+
+        assert!(member.joined_at >= before);
+        assert!(member.joined_at <= after);
+    }
+
+    // ==========================================================================
+    // Edge Cases
+    // ==========================================================================
+
+    #[test]
+    fn test_member_with_many_roles() {
+        let mut member = create_test_member();
+        // Add 100 roles
+        member.roles = (1..=100).collect();
+
+        assert_eq!(member.roles.len(), 100);
+        assert!(member.has_role(1));
+        assert!(member.has_role(50));
+        assert!(member.has_role(100));
+        assert!(!member.has_role(101));
+    }
+
+    #[test]
+    fn test_member_role_deduplication_not_enforced() {
+        // Note: The Member struct doesn't enforce unique roles
+        // This is a test to document current behavior
+        let mut member = create_test_member();
+        member.roles = vec![101, 101, 102]; // Duplicate role
+
+        assert_eq!(member.roles.len(), 3); // Contains duplicate
+    }
+
+    #[test]
+    fn test_member_display_name_with_special_characters() {
+        let mut member = create_test_member();
+        member.nickname = Some("Test <script>alert('xss')</script>".to_string());
+
+        // The nickname is stored as-is; escaping is the responsibility of display layer
+        assert_eq!(
+            member.display_name("username"),
+            "Test <script>alert('xss')</script>"
+        );
+    }
+
+    #[test]
+    fn test_member_display_name_with_unicode() {
+        let mut member = create_test_member();
+        member.nickname = Some("Test User".to_string());
+
+        assert_eq!(member.display_name("username"), "Test User");
+    }
+}

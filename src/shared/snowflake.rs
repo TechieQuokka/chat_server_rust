@@ -33,10 +33,12 @@ impl SnowflakeGenerator {
         let last = self.last_timestamp.load(Ordering::SeqCst);
 
         let sequence = if timestamp == last {
+            // Same millisecond: increment sequence
             self.sequence.fetch_add(1, Ordering::SeqCst) & 0xFFF
         } else {
+            // New millisecond: reset sequence to 1 (since we're using 0 for this ID)
             self.last_timestamp.store(timestamp, Ordering::SeqCst);
-            self.sequence.store(0, Ordering::SeqCst);
+            self.sequence.store(1, Ordering::SeqCst);
             0
         };
 

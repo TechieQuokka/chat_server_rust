@@ -219,3 +219,471 @@ pub trait ChannelRepository: Send + Sync {
         overwrites: Vec<PermissionOverwrite>,
     ) -> Result<(), AppError>;
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // ==========================================================================
+    // ChannelType Tests
+    // ==========================================================================
+
+    #[test]
+    fn test_channel_type_default_is_text() {
+        let channel_type = ChannelType::default();
+        assert_eq!(channel_type, ChannelType::Text);
+    }
+
+    #[test]
+    fn test_channel_type_from_str_text() {
+        assert_eq!(ChannelType::from_str("text"), ChannelType::Text);
+        assert_eq!(ChannelType::from_str("TEXT"), ChannelType::Text);
+        assert_eq!(ChannelType::from_str("Text"), ChannelType::Text);
+    }
+
+    #[test]
+    fn test_channel_type_from_str_voice() {
+        assert_eq!(ChannelType::from_str("voice"), ChannelType::Voice);
+        assert_eq!(ChannelType::from_str("VOICE"), ChannelType::Voice);
+    }
+
+    #[test]
+    fn test_channel_type_from_str_category() {
+        assert_eq!(ChannelType::from_str("category"), ChannelType::Category);
+        assert_eq!(ChannelType::from_str("CATEGORY"), ChannelType::Category);
+    }
+
+    #[test]
+    fn test_channel_type_from_str_dm() {
+        assert_eq!(ChannelType::from_str("dm"), ChannelType::Dm);
+        assert_eq!(ChannelType::from_str("DM"), ChannelType::Dm);
+    }
+
+    #[test]
+    fn test_channel_type_from_str_group_dm() {
+        assert_eq!(ChannelType::from_str("group_dm"), ChannelType::GroupDm);
+        assert_eq!(ChannelType::from_str("GROUP_DM"), ChannelType::GroupDm);
+    }
+
+    #[test]
+    fn test_channel_type_from_str_unknown_defaults_to_text() {
+        assert_eq!(ChannelType::from_str("unknown"), ChannelType::Text);
+        assert_eq!(ChannelType::from_str(""), ChannelType::Text);
+        assert_eq!(ChannelType::from_str("invalid"), ChannelType::Text);
+    }
+
+    #[test]
+    fn test_channel_type_as_str_roundtrip() {
+        let types = vec![
+            ChannelType::Text,
+            ChannelType::Voice,
+            ChannelType::Category,
+            ChannelType::Dm,
+            ChannelType::GroupDm,
+        ];
+
+        for channel_type in types {
+            let s = channel_type.as_str();
+            let parsed = ChannelType::from_str(s);
+            assert_eq!(parsed, channel_type, "Roundtrip failed for {:?}", channel_type);
+        }
+    }
+
+    #[test]
+    fn test_channel_type_as_str_values() {
+        assert_eq!(ChannelType::Text.as_str(), "text");
+        assert_eq!(ChannelType::Voice.as_str(), "voice");
+        assert_eq!(ChannelType::Category.as_str(), "category");
+        assert_eq!(ChannelType::Dm.as_str(), "dm");
+        assert_eq!(ChannelType::GroupDm.as_str(), "group_dm");
+    }
+
+    #[test]
+    fn test_channel_type_display() {
+        assert_eq!(format!("{}", ChannelType::Text), "text");
+        assert_eq!(format!("{}", ChannelType::Voice), "voice");
+        assert_eq!(format!("{}", ChannelType::Category), "category");
+        assert_eq!(format!("{}", ChannelType::Dm), "dm");
+        assert_eq!(format!("{}", ChannelType::GroupDm), "group_dm");
+    }
+
+    // ==========================================================================
+    // Channel Entity Tests
+    // ==========================================================================
+
+    fn create_test_channel(channel_type: ChannelType, server_id: Option<i64>) -> Channel {
+        Channel {
+            id: 12345678901234567,
+            server_id,
+            name: "test-channel".to_string(),
+            channel_type,
+            topic: None,
+            position: 0,
+            parent_id: None,
+            nsfw: false,
+            rate_limit_per_user: 0,
+            created_at: Utc::now(),
+            updated_at: Utc::now(),
+        }
+    }
+
+    #[test]
+    fn test_channel_default() {
+        let channel = Channel::default();
+
+        assert_eq!(channel.id, 0);
+        assert!(channel.server_id.is_none());
+        assert!(channel.name.is_empty());
+        assert_eq!(channel.channel_type, ChannelType::Text);
+        assert!(channel.topic.is_none());
+        assert_eq!(channel.position, 0);
+        assert!(channel.parent_id.is_none());
+        assert!(!channel.nsfw);
+        assert_eq!(channel.rate_limit_per_user, 0);
+    }
+
+    // ==========================================================================
+    // is_text_based Tests
+    // ==========================================================================
+
+    #[test]
+    fn test_channel_is_text_based_true_for_text() {
+        let channel = create_test_channel(ChannelType::Text, Some(100));
+        assert!(channel.is_text_based());
+    }
+
+    #[test]
+    fn test_channel_is_text_based_true_for_dm() {
+        let channel = create_test_channel(ChannelType::Dm, None);
+        assert!(channel.is_text_based());
+    }
+
+    #[test]
+    fn test_channel_is_text_based_true_for_group_dm() {
+        let channel = create_test_channel(ChannelType::GroupDm, None);
+        assert!(channel.is_text_based());
+    }
+
+    #[test]
+    fn test_channel_is_text_based_false_for_voice() {
+        let channel = create_test_channel(ChannelType::Voice, Some(100));
+        assert!(!channel.is_text_based());
+    }
+
+    #[test]
+    fn test_channel_is_text_based_false_for_category() {
+        let channel = create_test_channel(ChannelType::Category, Some(100));
+        assert!(!channel.is_text_based());
+    }
+
+    // ==========================================================================
+    // is_voice_based Tests
+    // ==========================================================================
+
+    #[test]
+    fn test_channel_is_voice_based_true_for_voice() {
+        let channel = create_test_channel(ChannelType::Voice, Some(100));
+        assert!(channel.is_voice_based());
+    }
+
+    #[test]
+    fn test_channel_is_voice_based_false_for_text() {
+        let channel = create_test_channel(ChannelType::Text, Some(100));
+        assert!(!channel.is_voice_based());
+    }
+
+    #[test]
+    fn test_channel_is_voice_based_false_for_dm() {
+        let channel = create_test_channel(ChannelType::Dm, None);
+        assert!(!channel.is_voice_based());
+    }
+
+    #[test]
+    fn test_channel_is_voice_based_false_for_category() {
+        let channel = create_test_channel(ChannelType::Category, Some(100));
+        assert!(!channel.is_voice_based());
+    }
+
+    // ==========================================================================
+    // is_category Tests
+    // ==========================================================================
+
+    #[test]
+    fn test_channel_is_category_true_for_category() {
+        let channel = create_test_channel(ChannelType::Category, Some(100));
+        assert!(channel.is_category());
+    }
+
+    #[test]
+    fn test_channel_is_category_false_for_text() {
+        let channel = create_test_channel(ChannelType::Text, Some(100));
+        assert!(!channel.is_category());
+    }
+
+    #[test]
+    fn test_channel_is_category_false_for_voice() {
+        let channel = create_test_channel(ChannelType::Voice, Some(100));
+        assert!(!channel.is_category());
+    }
+
+    // ==========================================================================
+    // is_dm Tests
+    // ==========================================================================
+
+    #[test]
+    fn test_channel_is_dm_true_for_dm() {
+        let channel = create_test_channel(ChannelType::Dm, None);
+        assert!(channel.is_dm());
+    }
+
+    #[test]
+    fn test_channel_is_dm_true_for_group_dm() {
+        let channel = create_test_channel(ChannelType::GroupDm, None);
+        assert!(channel.is_dm());
+    }
+
+    #[test]
+    fn test_channel_is_dm_false_for_text() {
+        let channel = create_test_channel(ChannelType::Text, Some(100));
+        assert!(!channel.is_dm());
+    }
+
+    #[test]
+    fn test_channel_is_dm_false_for_voice() {
+        let channel = create_test_channel(ChannelType::Voice, Some(100));
+        assert!(!channel.is_dm());
+    }
+
+    #[test]
+    fn test_channel_is_dm_false_for_category() {
+        let channel = create_test_channel(ChannelType::Category, Some(100));
+        assert!(!channel.is_dm());
+    }
+
+    // ==========================================================================
+    // is_server_channel Tests
+    // ==========================================================================
+
+    #[test]
+    fn test_channel_is_server_channel_true_when_has_server_id() {
+        let channel = create_test_channel(ChannelType::Text, Some(100));
+        assert!(channel.is_server_channel());
+    }
+
+    #[test]
+    fn test_channel_is_server_channel_false_when_no_server_id() {
+        let channel = create_test_channel(ChannelType::Dm, None);
+        assert!(!channel.is_server_channel());
+    }
+
+    // ==========================================================================
+    // Channel with Parent Category Tests
+    // ==========================================================================
+
+    #[test]
+    fn test_channel_with_parent_id() {
+        let mut channel = create_test_channel(ChannelType::Text, Some(100));
+        channel.parent_id = Some(200);
+
+        assert_eq!(channel.parent_id, Some(200));
+    }
+
+    #[test]
+    fn test_channel_without_parent_id() {
+        let channel = create_test_channel(ChannelType::Text, Some(100));
+        assert!(channel.parent_id.is_none());
+    }
+
+    // ==========================================================================
+    // Channel NSFW Tests
+    // ==========================================================================
+
+    #[test]
+    fn test_channel_nsfw_default_false() {
+        let channel = create_test_channel(ChannelType::Text, Some(100));
+        assert!(!channel.nsfw);
+    }
+
+    #[test]
+    fn test_channel_nsfw_can_be_set() {
+        let mut channel = create_test_channel(ChannelType::Text, Some(100));
+        channel.nsfw = true;
+        assert!(channel.nsfw);
+    }
+
+    // ==========================================================================
+    // Channel Rate Limit Tests
+    // ==========================================================================
+
+    #[test]
+    fn test_channel_rate_limit_default_zero() {
+        let channel = create_test_channel(ChannelType::Text, Some(100));
+        assert_eq!(channel.rate_limit_per_user, 0);
+    }
+
+    #[test]
+    fn test_channel_rate_limit_can_be_set() {
+        let mut channel = create_test_channel(ChannelType::Text, Some(100));
+        channel.rate_limit_per_user = 5; // 5 second slowmode
+        assert_eq!(channel.rate_limit_per_user, 5);
+    }
+
+    // ==========================================================================
+    // Channel Serialization Tests
+    // ==========================================================================
+
+    #[test]
+    fn test_channel_type_serializes_as_type() {
+        let channel = create_test_channel(ChannelType::Text, Some(100));
+
+        let serialized = serde_json::to_string(&channel).expect("Failed to serialize channel");
+
+        // channel_type should be serialized as "type" due to #[serde(rename = "type")]
+        assert!(serialized.contains("\"type\":\"text\""));
+    }
+
+    #[test]
+    fn test_channel_serialization_includes_all_fields() {
+        let mut channel = create_test_channel(ChannelType::Voice, Some(100));
+        channel.topic = Some("Test topic".to_string());
+        channel.nsfw = true;
+        channel.rate_limit_per_user = 10;
+
+        let serialized = serde_json::to_string(&channel).expect("Failed to serialize channel");
+
+        assert!(serialized.contains("\"id\":12345678901234567"));
+        assert!(serialized.contains("\"server_id\":100"));
+        assert!(serialized.contains("\"name\":\"test-channel\""));
+        assert!(serialized.contains("\"type\":\"voice\""));
+        assert!(serialized.contains("\"topic\":\"Test topic\""));
+        assert!(serialized.contains("\"nsfw\":true"));
+        assert!(serialized.contains("\"rate_limit_per_user\":10"));
+    }
+
+    // ==========================================================================
+    // PermissionOverwrite Tests
+    // ==========================================================================
+
+    #[test]
+    fn test_permission_overwrite_creation() {
+        let overwrite = PermissionOverwrite {
+            channel_id: 100,
+            target_id: 200,
+            target_type: "role".to_string(),
+            allow: 1024, // VIEW_CHANNEL
+            deny: 2048,  // SEND_MESSAGES
+        };
+
+        assert_eq!(overwrite.channel_id, 100);
+        assert_eq!(overwrite.target_id, 200);
+        assert_eq!(overwrite.target_type, "role");
+        assert_eq!(overwrite.allow, 1024);
+        assert_eq!(overwrite.deny, 2048);
+    }
+
+    #[test]
+    fn test_permission_overwrite_for_member() {
+        let overwrite = PermissionOverwrite {
+            channel_id: 100,
+            target_id: 300, // user_id
+            target_type: "member".to_string(),
+            allow: 0,
+            deny: 0,
+        };
+
+        assert_eq!(overwrite.target_type, "member");
+    }
+
+    #[test]
+    fn test_permission_overwrite_clone() {
+        let overwrite = PermissionOverwrite {
+            channel_id: 100,
+            target_id: 200,
+            target_type: "role".to_string(),
+            allow: 1024,
+            deny: 2048,
+        };
+
+        let cloned = overwrite.clone();
+
+        assert_eq!(overwrite.channel_id, cloned.channel_id);
+        assert_eq!(overwrite.target_id, cloned.target_id);
+        assert_eq!(overwrite.target_type, cloned.target_type);
+        assert_eq!(overwrite.allow, cloned.allow);
+        assert_eq!(overwrite.deny, cloned.deny);
+    }
+
+    // ==========================================================================
+    // Channel Clone Tests
+    // ==========================================================================
+
+    #[test]
+    fn test_channel_clone() {
+        let channel = create_test_channel(ChannelType::Text, Some(100));
+        let cloned = channel.clone();
+
+        assert_eq!(channel.id, cloned.id);
+        assert_eq!(channel.server_id, cloned.server_id);
+        assert_eq!(channel.name, cloned.name);
+        assert_eq!(channel.channel_type, cloned.channel_type);
+    }
+
+    // ==========================================================================
+    // ChannelType Copy Tests
+    // ==========================================================================
+
+    #[test]
+    fn test_channel_type_is_copy() {
+        let ct1 = ChannelType::Text;
+        let ct2 = ct1; // Copy
+
+        assert_eq!(ct1, ct2);
+    }
+
+    // ==========================================================================
+    // Channel Position Tests
+    // ==========================================================================
+
+    #[test]
+    fn test_channel_position_default_zero() {
+        let channel = create_test_channel(ChannelType::Text, Some(100));
+        assert_eq!(channel.position, 0);
+    }
+
+    #[test]
+    fn test_channel_position_can_be_set() {
+        let mut channel = create_test_channel(ChannelType::Text, Some(100));
+        channel.position = 5;
+        assert_eq!(channel.position, 5);
+    }
+
+    #[test]
+    fn test_channel_position_ordering() {
+        let mut channels = vec![
+            {
+                let mut c = create_test_channel(ChannelType::Text, Some(100));
+                c.position = 2;
+                c.name = "channel-c".to_string();
+                c
+            },
+            {
+                let mut c = create_test_channel(ChannelType::Text, Some(100));
+                c.position = 0;
+                c.name = "channel-a".to_string();
+                c
+            },
+            {
+                let mut c = create_test_channel(ChannelType::Text, Some(100));
+                c.position = 1;
+                c.name = "channel-b".to_string();
+                c
+            },
+        ];
+
+        channels.sort_by_key(|c| c.position);
+
+        assert_eq!(channels[0].name, "channel-a");
+        assert_eq!(channels[1].name, "channel-b");
+        assert_eq!(channels[2].name, "channel-c");
+    }
+}

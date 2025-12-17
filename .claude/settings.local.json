@@ -6,7 +6,12 @@
       "Bash(cargo check:*)",
       "Bash(git init:*)",
       "mcp__github__create_repository",
-      "Bash(git add:*)"
+      "Bash(git add:*)",
+      "Bash(git commit -m \"$(cat <<''EOF''\nfeat: Initial commit - Discord-like Rust chat server\n\nImplements a complete real-time chat server with:\n\nArchitecture (Clean Architecture + DDD):\n- Domain layer: 9 entities, value objects (Snowflake, Permissions)\n- Application layer: 5 services (Auth, User, Guild, Channel, Message)\n- Infrastructure layer: PostgreSQL repositories, Redis cache\n- Presentation layer: REST API, WebSocket gateway\n\nFeatures:\n- JWT authentication with Argon2id password hashing\n- 19 REST API endpoints (Auth, Users, Guilds, Channels, Messages)\n- Discord-compatible WebSocket gateway (opcodes 0-11)\n- Redis caching (sessions, permissions, typing indicators)\n- Rate limiting with sliding window algorithm\n- 14 database migrations with proper indexes\n\nTech Stack:\n- Rust 2021, Axum 0.7, SQLx 0.8, Redis\n- PostgreSQL 16, DashMap for concurrent sessions\n- Tower middleware, Tracing for observability\n\n🤖 Generated with [Claude Code](https://claude.com/claude-code)\n\nCo-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>\nEOF\n)\")",
+      "Bash(git branch:*)",
+      "Bash(git remote add:*)",
+      "Bash(git push:*)",
+      "Bash(cargo test:*)"
     ]
   }
 }
