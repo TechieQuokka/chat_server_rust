@@ -1,0 +1,285 @@
+version: '3.9'
+
+services:
+  # ============================================
+  # PostgreSQL 16 - Primary Database
+  # ============================================
+  postgres:
+    image: postgres:16-alpine
+    container_name: chat_postgres
+    environment:
+      POSTGRES_USER: chat_user
+      POSTGRES_PASSWORD: chat_password
+      POSTGRES_DB: chat_db
+      # Performance tuning for development
+      POSTGRES_INITDB_ARGS: "--encoding=UTF8 --locale=C"
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./scripts/init-db.sql:/docker-entrypoint-initdb.d/01-init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U chat_user -d chat_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    command:
+      - "postgres"
+      # Connection settings
+      - "-c"
+      - "max_connections=200"
+      # Memory settings (tuned for dev - 512MB)
+      - "-c"
+      - "shared_buffers=128MB"
+      - "-c"
+      - "effective_cache_size=384MB"
+      - "-c"
+      - "maintenance_work_mem=64MB"
+      - "-c"
+      - "work_mem=4MB"
+      # WAL settings
+      - "-c"
+      - "wal_buffers=8MB"
+      - "-c"
+      - "checkpoint_completion_target=0.9"
+      # Query planner settings
+      - "-c"
+      - "default_statistics_target=100"
+      - "-c"
+      - "random_page_cost=1.1"
+      - "-c"
+      - "effective_io_concurrency=200"
+      # Logging - enabled for development
+      - "-c"
+      - "log_statement=all"
+      - "-c"
+      - "log_duration=on"
+      - "-c"
+      - "log_min_duration_statement=100"
+      - "-c"
+      - "log_line_prefix=%t [%p]: [%l-1] user=%u,db=%d,app=%a,client=%h "
+      - "-c"
+      - "log_checkpoints=on"
+      - "-c"
+      - "log_connections=on"
+      - "-c"
+      - "log_disconnections=on"
+      - "-c"
+      - "log_lock_waits=on"
+    networks:
+      - chat_network
+    restart: unless-stopped
+
+  # ============================================
+  # Redis 7 - Cache & Pub/Sub
+  # ============================================
+  redis:
+    image: redis:7-alpine
+    container_name: chat_redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+      - ./config/redis.conf:/usr/local/etc/redis/redis.conf:ro
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
+    command: redis-server /usr/local/etc/redis/redis.conf
+    networks:
+      - chat_network
+    restart: unless-stopped
+
+  # ============================================
+  # pgAdmin 4 - PostgreSQL GUI
+  # ============================================
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: chat_pgadmin
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@chat.local
+      PGADMIN_DEFAULT_PASSWORD: admin
+      PGADMIN_CONFIG_SERVER_MODE: 'False'
+      PGADMIN_CONFIG_MASTER_PASSWORD_REQUIRED: 'False'
+    ports:
+      - "5050:80"
+    volumes:
+      - pgadmin_data:/var/lib/pgadmin
+    healthcheck:
+      test: ["CMD", "wget", "-O", "-", "http://localhost:80/misc/ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - chat_network
+    restart: unless-stopped
+
+  # ============================================
+  # Redis Insight - Redis GUI
+  # ============================================
+  redis-insight:
+    image: redislabs/redisinsight:latest
+    container_name: chat_redis_insight
+    ports:
+      - "8001:8001"
+    volumes:
+      - redis_insight_data:/db
+    healthcheck:
+      test: ["CMD", "wget", "-O", "-", "http://localhost:8001/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks:
+      - chat_network
+    restart: unless-stopped
+
+  # ============================================
+  # Jaeger - Distributed Tracing (OTLP enabled)
+  # ============================================
+  jaeger:
+    image: jaegertracing/all-in-one:latest
+    container_name: chat_jaeger
+    environment:
+      COLLECTOR_OTLP_ENABLED: "true"
+      COLLECTOR_ZIPKIN_HOST_PORT: ":9411"
+      SPAN_STORAGE_TYPE: "badger"
+      BADGER_EPHEMERAL: "false"
+      BADGER_DIRECTORY_VALUE: "/badger/data"
+      BADGER_DIRECTORY_KEY: "/badger/key"
+    ports:
+      - "5775:5775/udp"    # Zipkin compact thrift
+      - "6831:6831/udp"    # Jaeger thrift compact
+      - "6832:6832/udp"    # Jaeger thrift binary
+      - "5778:5778"        # Serve configs
+      - "16686:16686"      # Web UI
+      - "14250:14250"      # gRPC
+      - "14268:14268"      # HTTP thrift
+      - "14269:14269"      # Admin port
+      - "4317:4317"        # OTLP gRPC receiver
+      - "4318:4318"        # OTLP HTTP receiver
+      - "9411:9411"        # Zipkin compatible endpoint
+    volumes:
+      - jaeger_data:/badger
+    healthcheck:
+      test: ["CMD", "wget", "-O", "-", "http://localhost:14269/"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    networks:
+      - chat_network
+    restart: unless-stopped
+
+  # ============================================
+  # Prometheus - Metrics Collection
+  # ============================================
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: chat_prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./config/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--storage.tsdb.retention.time=15d'
+      - '--web.enable-lifecycle'
+      - '--web.enable-admin-api'
+    healthcheck:
+      test: ["CMD", "wget", "-O", "-", "http://localhost:9090/-/healthy"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    networks:
+      - chat_network
+    restart: unless-stopped
+
+  # ============================================
+  # Grafana - Dashboards & Visualization
+  # ============================================
+  grafana:
+    image: grafana/grafana:latest
+    container_name: chat_grafana
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: admin
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_SERVER_ROOT_URL: "http://localhost:3000"
+      GF_INSTALL_PLUGINS: "grafana-clock-panel,grafana-piechart-panel"
+    ports:
+      - "3000:3000"
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./config/grafana/provisioning:/etc/grafana/provisioning:ro
+    healthcheck:
+      test: ["CMD-SHELL", "wget -O - http://localhost:3000/api/health | grep ok"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    depends_on:
+      prometheus:
+        condition: service_healthy
+    networks:
+      - chat_network
+    restart: unless-stopped
+
+  # ============================================
+  # MailHog - Email Testing
+  # ============================================
+  mailhog:
+    image: mailhog/mailhog:latest
+    container_name: chat_mailhog
+    ports:
+      - "1025:1025"   # SMTP server
+      - "8025:8025"   # Web UI
+    healthcheck:
+      test: ["CMD", "wget", "-O", "-", "http://localhost:8025/api/v2/messages?limit=1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    networks:
+      - chat_network
+    restart: unless-stopped
+
+# ============================================
+# Named Volumes for Data Persistence
+# ============================================
+volumes:
+  postgres_data:
+    name: chat_postgres_data
+  redis_data:
+    name: chat_redis_data
+  pgadmin_data:
+    name: chat_pgadmin_data
+  redis_insight_data:
+    name: chat_redis_insight_data
+  jaeger_data:
+    name: chat_jaeger_data
+  prometheus_data:
+    name: chat_prometheus_data
+  grafana_data:
+    name: chat_grafana_data
+
+# ============================================
+# Network Configuration
+# ============================================
+networks:
+  chat_network:
+    name: chat_network
+    driver: bridge

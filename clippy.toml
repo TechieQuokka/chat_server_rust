@@ -1,0 +1,170 @@
+# ============================================
+# Clippy Configuration
+# Chat Server Project
+# ============================================
+
+# ============================================
+# Complexity Thresholds
+# ============================================
+
+# Maximum cognitive complexity allowed for a function
+# Default is 25, increase for complex handlers
+cognitive-complexity-threshold = 25
+
+# Maximum number of arguments a function can have
+# Default is 7
+too-many-arguments-threshold = 7
+
+# Maximum type complexity score
+# Default is 250
+type-complexity-threshold = 250
+
+# Maximum number of lines in a function
+# Default is 100
+too-many-lines-threshold = 100
+
+# Maximum number of statements in a single expression function
+single-char-binding-names-threshold = 5
+
+# ============================================
+# Naming Conventions
+# ============================================
+
+# Allowed names that would otherwise trigger `disallowed_names` lint
+# Common placeholder names in tests
+allowed-idents-below-min-chars = ["x", "y", "z", "i", "j", "k", "n", "id", "tx", "rx"]
+
+# ============================================
+# Documentation
+# ============================================
+
+# Missing documentation is allowed for private items
+missing-docs-in-crate-items = false
+
+# ============================================
+# Enum Variants
+# ============================================
+
+# Maximum number of enum variants before suggesting a different pattern
+enum-variant-name-threshold = 3
+
+# ============================================
+# Struct Fields
+# ============================================
+
+# Maximum number of struct fields
+max-struct-bools = 3
+
+# ============================================
+# Trivial Copy Size
+# ============================================
+
+# Size in bytes above which types should not be trivially copied
+trivial-copy-size-limit = 16
+
+# ============================================
+# Pattern Matching
+# ============================================
+
+# Maximum number of patterns in a match before suggesting a lookup table
+single-match-else-arm-default = true
+
+# ============================================
+# Async Context
+# ============================================
+
+# Warn about large futures that may cause stack issues
+future-size-threshold = 16384
+
+# ============================================
+# String Manipulation
+# ============================================
+
+# Minimum length of a string literal before suggesting a static
+min-ident-chars-threshold = 1
+
+# ============================================
+# MSRV (Minimum Supported Rust Version)
+# ============================================
+
+# Minimum Rust version for lint suggestions
+msrv = "1.75.0"
+
+# ============================================
+# Disallowed Methods (Security)
+# ============================================
+
+# Methods that should not be used in this project
+# These are configured via #![deny] attributes in code
+# disallowed-methods = []
+
+# ============================================
+# Disallowed Types
+# ============================================
+
+# Types that should not be used in this project
+# disallowed-types = []
+
+# ============================================
+# Vector Initialization
+# ============================================
+
+# Warn when creating vectors with known capacity
+vec-box-size-threshold = 4096
+
+# ============================================
+# Literal Representation
+# ============================================
+
+# Threshold for unreadable literals
+unreadable-literal-lint-fractions = true
+
+# ============================================
+# Pass by Value Threshold
+# ============================================
+
+# Size in bytes for pass-by-value threshold
+pass-by-value-size-limit = 256
+
+# ============================================
+# Large Stack Arrays
+# ============================================
+
+# Maximum array size before warning
+array-size-threshold = 512000
+
+# ============================================
+# Semicolon Inside Block
+# ============================================
+
+# Allow semicolon inside blocks
+semicolon-inside-block-ignore-singleline = true
+semicolon-outside-block-ignore-multiline = true
+
+# ============================================
+# Stack Size
+# ============================================
+
+# Maximum stack size for functions
+stack-size-threshold = 512000
+
+# ============================================
+# Verbose Bit Masks
+# ============================================
+
+# Maximum size before suggesting hex representation
+verbose-bit-mask-threshold = 1
+
+# ============================================
+# Warn on All Public Items Without Docs
+# ============================================
+
+# Set to true to enforce documentation on public items
+warn-on-all-wildcard-imports = false
+
+# ============================================
+# Allowed Wildcard Imports
+# ============================================
+
+# Modules where wildcard imports are acceptable
+allowed-wildcard-imports = ["prelude"]

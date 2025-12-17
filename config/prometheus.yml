@@ -1,0 +1,142 @@
+# ============================================
+# Prometheus Configuration for Chat Server
+# Development Environment
+# ============================================
+
+global:
+  # How frequently to scrape targets
+  scrape_interval: 15s
+  # How frequently to evaluate rules
+  evaluation_interval: 15s
+  # Attach labels to any time series or alerts
+  external_labels:
+    environment: 'development'
+    project: 'chat-server'
+
+# Alertmanager configuration (optional for dev)
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets: []
+          # - alertmanager:9093
+
+# Rule files (optional for dev)
+rule_files: []
+  # - /etc/prometheus/rules/*.yml
+
+# Scrape configuration
+scrape_configs:
+  # ============================================
+  # Prometheus self-monitoring
+  # ============================================
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+    metrics_path: '/metrics'
+    scheme: 'http'
+
+  # ============================================
+  # Chat Server API - Main Application
+  # ============================================
+  - job_name: 'chat-server'
+    static_configs:
+      - targets: ['host.docker.internal:8080']
+        labels:
+          service: 'api'
+          version: 'v1'
+    metrics_path: '/metrics'
+    scheme: 'http'
+    scrape_interval: 10s
+    scrape_timeout: 5s
+
+  # ============================================
+  # Chat Server Gateway (WebSocket)
+  # ============================================
+  - job_name: 'chat-gateway'
+    static_configs:
+      - targets: ['host.docker.internal:8081']
+        labels:
+          service: 'gateway'
+          version: 'v1'
+    metrics_path: '/metrics'
+    scheme: 'http'
+    scrape_interval: 10s
+    scrape_timeout: 5s
+
+  # ============================================
+  # PostgreSQL Metrics (via postgres_exporter)
+  # ============================================
+  # Uncomment when postgres_exporter is added
+  # - job_name: 'postgresql'
+  #   static_configs:
+  #     - targets: ['postgres-exporter:9187']
+  #       labels:
+  #         database: 'chat_db'
+  #   metrics_path: '/metrics'
+  #   scheme: 'http'
+
+  # ============================================
+  # Redis Metrics (via redis_exporter)
+  # ============================================
+  # Uncomment when redis_exporter is added
+  # - job_name: 'redis'
+  #   static_configs:
+  #     - targets: ['redis-exporter:9121']
+  #       labels:
+  #         instance: 'chat_redis'
+  #   metrics_path: '/metrics'
+  #   scheme: 'http'
+
+  # ============================================
+  # Node Exporter (System Metrics)
+  # ============================================
+  # Uncomment when node_exporter is added
+  # - job_name: 'node'
+  #   static_configs:
+  #     - targets: ['node-exporter:9100']
+  #   metrics_path: '/metrics'
+  #   scheme: 'http'
+
+  # ============================================
+  # Docker Container Metrics (via cAdvisor)
+  # ============================================
+  # Uncomment when cAdvisor is added
+  # - job_name: 'cadvisor'
+  #   static_configs:
+  #     - targets: ['cadvisor:8080']
+  #   metrics_path: '/metrics'
+  #   scheme: 'http'
+
+  # ============================================
+  # Jaeger Metrics
+  # ============================================
+  - job_name: 'jaeger'
+    static_configs:
+      - targets: ['jaeger:14269']
+        labels:
+          service: 'tracing'
+    metrics_path: '/metrics'
+    scheme: 'http'
+
+# ============================================
+# Remote Write (Optional - for long-term storage)
+# ============================================
+# remote_write:
+#   - url: "http://remote-storage:9201/write"
+#     remote_timeout: 30s
+#     queue_config:
+#       capacity: 500
+#       max_shards: 1000
+#       min_shards: 1
+#       max_samples_per_send: 100
+#       batch_send_deadline: 5s
+#       min_backoff: 30ms
+#       max_backoff: 100ms
+
+# ============================================
+# Remote Read (Optional - for long-term storage)
+# ============================================
+# remote_read:
+#   - url: "http://remote-storage:9201/read"
+#     remote_timeout: 1m
+#     read_recent: true
