@@ -63,13 +63,6 @@ max-struct-bools = 3
 trivial-copy-size-limit = 16
 
 # ============================================
-# Pattern Matching
-# ============================================
-
-# Maximum number of patterns in a match before suggesting a lookup table
-single-match-else-arm-default = true
-
-# ============================================
 # Async Context
 # ============================================
 

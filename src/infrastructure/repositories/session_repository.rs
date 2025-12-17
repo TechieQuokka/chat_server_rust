@@ -158,6 +158,31 @@ impl SessionRepository for PgSessionRepository {
         Ok(())
     }
 
+    /// Update refresh token hash (for token rotation).
+    async fn update_token_hash(
+        &self,
+        id: Uuid,
+        new_token_hash: &str,
+        new_expires_at: DateTime<Utc>,
+    ) -> Result<(), AppError> {
+        sqlx::query(
+            r#"
+            UPDATE user_sessions
+            SET refresh_token_hash = $2,
+                expires_at = $3,
+                last_used_at = NOW()
+            WHERE id = $1
+            "#,
+        )
+        .bind(id)
+        .bind(new_token_hash)
+        .bind(new_expires_at)
+        .execute(&self.pool)
+        .await?;
+
+        Ok(())
+    }
+
     /// Revoke a session (set revoked_at).
     async fn revoke(&self, id: Uuid) -> Result<(), AppError> {
         sqlx::query("UPDATE user_sessions SET revoked_at = NOW() WHERE id = $1")

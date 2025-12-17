@@ -63,6 +63,9 @@ pub struct Claims {
     pub exp: i64,
     /// Issued at time (Unix timestamp)
     pub iat: i64,
+    /// JWT ID for token revocation tracking
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub jti: Option<String>,
 }
 
 /// Authentication errors
@@ -150,13 +153,16 @@ where
     fn generate_tokens(&self, user_id: i64) -> Result<AuthTokens, AuthError> {
         let now = Utc::now();
         let access_expiry = now + Duration::minutes(self.jwt_settings.access_token_expiry_minutes);
-        let refresh_expiry = now + Duration::days(self.jwt_settings.refresh_token_expiry_days);
 
-        // Generate access token
+        // Generate unique JWT ID for token revocation tracking
+        let jti = uuid::Uuid::new_v4().to_string();
+
+        // Generate access token with jti claim
         let access_claims = Claims {
             sub: user_id.to_string(),
             exp: access_expiry.timestamp(),
             iat: now.timestamp(),
+            jti: Some(jti),
         };
 
         let access_token = encode(
@@ -166,12 +172,12 @@ where
         )
         .map_err(|e| AuthError::Internal(format!("Token generation failed: {}", e)))?;
 
-        // Generate refresh token (random UUID-like string)
+        // Generate opaque refresh token (no sensitive data exposed)
+        // Format: random_uuid.random_uuid (completely opaque, no user info)
         let refresh_token = format!(
-            "{}.{}.{}",
+            "{}.{}",
             uuid::Uuid::new_v4(),
-            refresh_expiry.timestamp(),
-            user_id
+            uuid::Uuid::new_v4()
         );
 
         Ok(AuthTokens {
@@ -332,35 +338,18 @@ where
             return Err(AuthError::TokenExpired);
         }
 
-        // Update last_used_at
+        // Generate new tokens (TOKEN ROTATION for security)
+        let new_tokens = self.generate_tokens(session.user_id)?;
+        let new_token_hash = self.hash_refresh_token(&new_tokens.refresh_token);
+        let new_expires_at = Utc::now() + Duration::days(self.jwt_settings.refresh_token_expiry_days);
+
+        // Update session with new refresh token hash (token rotation)
         self.session_repo
-            .touch(session.id)
+            .update_token_hash(session.id, &new_token_hash, new_expires_at)
             .await
             .map_err(|e| AuthError::Internal(e.to_string()))?;
 
-        // Generate new access token (keep same refresh token)
-        let now = Utc::now();
-        let access_expiry = now + Duration::minutes(self.jwt_settings.access_token_expiry_minutes);
-
-        let access_claims = Claims {
-            sub: session.user_id.to_string(),
-            exp: access_expiry.timestamp(),
-            iat: now.timestamp(),
-        };
-
-        let access_token = encode(
-            &Header::default(),
-            &access_claims,
-            &EncodingKey::from_secret(self.jwt_settings.secret.as_bytes()),
-        )
-        .map_err(|e| AuthError::Internal(format!("Token generation failed: {}", e)))?;
-
-        Ok(AuthTokens {
-            access_token,
-            refresh_token: refresh_token.to_string(),
-            expires_in: self.jwt_settings.access_token_expiry_minutes * 60,
-            token_type: "Bearer".to_string(),
-        })
+        Ok(new_tokens)
     }
 
     async fn revoke_token(&self, refresh_token: &str) -> Result<(), AuthError> {

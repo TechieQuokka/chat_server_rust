@@ -204,6 +204,14 @@ pub trait SessionRepository: Send + Sync {
     /// Update last_used_at timestamp.
     async fn touch(&self, id: Uuid) -> Result<(), AppError>;
 
+    /// Update refresh token hash (for token rotation).
+    async fn update_token_hash(
+        &self,
+        id: Uuid,
+        new_token_hash: &str,
+        new_expires_at: DateTime<Utc>,
+    ) -> Result<(), AppError>;
+
     /// Revoke a session (set revoked_at).
     async fn revoke(&self, id: Uuid) -> Result<(), AppError>;
 

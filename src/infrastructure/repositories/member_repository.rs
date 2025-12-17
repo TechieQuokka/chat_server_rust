@@ -19,6 +19,17 @@ struct MemberRow {
     joined_at: DateTime<Utc>,
 }
 
+/// Database row with aggregated roles (for JOIN queries to avoid N+1).
+#[derive(Debug, sqlx::FromRow)]
+struct MemberWithRolesRow {
+    server_id: i64,
+    user_id: i64,
+    nickname: Option<String>,
+    joined_at: DateTime<Utc>,
+    /// Aggregated role IDs from LEFT JOIN with member_roles
+    role_ids: Option<Vec<i64>>,
+}
+
 impl MemberRow {
     /// Convert database row to domain Member entity.
     /// Note: roles are loaded separately.
@@ -29,6 +40,20 @@ impl MemberRow {
             nickname: self.nickname,
             joined_at: self.joined_at,
             roles,
+        }
+    }
+}
+
+impl MemberWithRolesRow {
+    /// Convert database row with aggregated roles to domain Member entity.
+    fn into_member(self) -> Member {
+        Member {
+            server_id: self.server_id,
+            user_id: self.user_id,
+            nickname: self.nickname,
+            joined_at: self.joined_at,
+            // Handle NULL from array_agg when no roles exist
+            roles: self.role_ids.unwrap_or_default(),
         }
     }
 }
@@ -129,29 +154,28 @@ impl MemberRepository for PgMemberRepository {
     }
 
     /// Find all servers a user is a member of.
+    /// Uses a single query with array_agg to avoid N+1 pattern.
     async fn find_by_user(&self, user_id: i64) -> Result<Vec<Member>, AppError> {
-        let rows = sqlx::query_as::<_, MemberRow>(
+        let rows = sqlx::query_as::<_, MemberWithRolesRow>(
             r#"
-            SELECT server_id, user_id, nickname, joined_at
-            FROM server_members
-            WHERE user_id = $1
-            ORDER BY joined_at DESC
+            SELECT sm.server_id, sm.user_id, sm.nickname, sm.joined_at,
+                   ARRAY_REMOVE(ARRAY_AGG(mr.role_id), NULL) as role_ids
+            FROM server_members sm
+            LEFT JOIN member_roles mr ON sm.server_id = mr.server_id AND sm.user_id = mr.user_id
+            WHERE sm.user_id = $1
+            GROUP BY sm.server_id, sm.user_id, sm.nickname, sm.joined_at
+            ORDER BY sm.joined_at DESC
             "#,
         )
         .bind(user_id)
         .fetch_all(&self.pool)
         .await?;
 
-        let mut members = Vec::with_capacity(rows.len());
-        for row in rows {
-            let roles = self.load_member_roles(row.server_id, user_id).await?;
-            members.push(row.into_member(roles));
-        }
-
-        Ok(members)
+        Ok(rows.into_iter().map(|r| r.into_member()).collect())
     }
 
     /// Find all members in a server with cursor-based pagination.
+    /// Uses a single query with array_agg to avoid N+1 pattern.
     async fn find_by_server_id(
         &self,
         server_id: i64,
@@ -160,12 +184,15 @@ impl MemberRepository for PgMemberRepository {
     ) -> Result<Vec<Member>, AppError> {
         let rows = if let Some(after_user_id) = after {
             // Cursor-based pagination using user_id
-            sqlx::query_as::<_, MemberRow>(
+            sqlx::query_as::<_, MemberWithRolesRow>(
                 r#"
-                SELECT server_id, user_id, nickname, joined_at
-                FROM server_members
-                WHERE server_id = $1 AND user_id > $2
-                ORDER BY user_id ASC
+                SELECT sm.server_id, sm.user_id, sm.nickname, sm.joined_at,
+                       ARRAY_REMOVE(ARRAY_AGG(mr.role_id), NULL) as role_ids
+                FROM server_members sm
+                LEFT JOIN member_roles mr ON sm.server_id = mr.server_id AND sm.user_id = mr.user_id
+                WHERE sm.server_id = $1 AND sm.user_id > $2
+                GROUP BY sm.server_id, sm.user_id, sm.nickname, sm.joined_at
+                ORDER BY sm.user_id ASC
                 LIMIT $3
                 "#,
             )
@@ -175,12 +202,15 @@ impl MemberRepository for PgMemberRepository {
             .fetch_all(&self.pool)
             .await?
         } else {
-            sqlx::query_as::<_, MemberRow>(
+            sqlx::query_as::<_, MemberWithRolesRow>(
                 r#"
-                SELECT server_id, user_id, nickname, joined_at
-                FROM server_members
-                WHERE server_id = $1
-                ORDER BY user_id ASC
+                SELECT sm.server_id, sm.user_id, sm.nickname, sm.joined_at,
+                       ARRAY_REMOVE(ARRAY_AGG(mr.role_id), NULL) as role_ids
+                FROM server_members sm
+                LEFT JOIN member_roles mr ON sm.server_id = mr.server_id AND sm.user_id = mr.user_id
+                WHERE sm.server_id = $1
+                GROUP BY sm.server_id, sm.user_id, sm.nickname, sm.joined_at
+                ORDER BY sm.user_id ASC
                 LIMIT $2
                 "#,
             )
@@ -190,17 +220,12 @@ impl MemberRepository for PgMemberRepository {
             .await?
         };
 
-        let mut members = Vec::with_capacity(rows.len());
-        for row in rows {
-            let roles = self.load_member_roles(server_id, row.user_id).await?;
-            members.push(row.into_member(roles));
-        }
-
-        Ok(members)
+        Ok(rows.into_iter().map(|r| r.into_member()).collect())
     }
 
     /// Search members by nickname or username.
     /// Joins with users table to search by username as well.
+    /// Uses a single query with array_agg to avoid N+1 pattern.
     async fn search(
         &self,
         server_id: i64,
@@ -209,13 +234,16 @@ impl MemberRepository for PgMemberRepository {
     ) -> Result<Vec<Member>, AppError> {
         let search_pattern = format!("%{}%", query);
 
-        let rows = sqlx::query_as::<_, MemberRow>(
+        let rows = sqlx::query_as::<_, MemberWithRolesRow>(
             r#"
-            SELECT sm.server_id, sm.user_id, sm.nickname, sm.joined_at
+            SELECT sm.server_id, sm.user_id, sm.nickname, sm.joined_at,
+                   ARRAY_REMOVE(ARRAY_AGG(mr.role_id), NULL) as role_ids
             FROM server_members sm
             INNER JOIN users u ON sm.user_id = u.id
+            LEFT JOIN member_roles mr ON sm.server_id = mr.server_id AND sm.user_id = mr.user_id
             WHERE sm.server_id = $1
               AND (sm.nickname ILIKE $2 OR u.username ILIKE $2)
+            GROUP BY sm.server_id, sm.user_id, sm.nickname, sm.joined_at
             ORDER BY sm.joined_at DESC
             LIMIT $3
             "#,
@@ -226,13 +254,7 @@ impl MemberRepository for PgMemberRepository {
         .fetch_all(&self.pool)
         .await?;
 
-        let mut members = Vec::with_capacity(rows.len());
-        for row in rows {
-            let roles = self.load_member_roles(server_id, row.user_id).await?;
-            members.push(row.into_member(roles));
-        }
-
-        Ok(members)
+        Ok(rows.into_iter().map(|r| r.into_member()).collect())
     }
 
     /// Add a member to a server.
@@ -401,13 +423,19 @@ impl MemberRepository for PgMemberRepository {
     }
 
     /// Find members with a specific role.
+    /// Uses a single query with array_agg to avoid N+1 pattern.
     async fn find_by_role(&self, server_id: i64, role_id: i64) -> Result<Vec<Member>, AppError> {
-        let rows = sqlx::query_as::<_, MemberRow>(
+        let rows = sqlx::query_as::<_, MemberWithRolesRow>(
             r#"
-            SELECT sm.server_id, sm.user_id, sm.nickname, sm.joined_at
+            SELECT sm.server_id, sm.user_id, sm.nickname, sm.joined_at,
+                   ARRAY_REMOVE(ARRAY_AGG(all_mr.role_id), NULL) as role_ids
             FROM server_members sm
-            INNER JOIN member_roles mr ON sm.server_id = mr.server_id AND sm.user_id = mr.user_id
-            WHERE sm.server_id = $1 AND mr.role_id = $2
+            INNER JOIN member_roles filter_mr ON sm.server_id = filter_mr.server_id
+                AND sm.user_id = filter_mr.user_id AND filter_mr.role_id = $2
+            LEFT JOIN member_roles all_mr ON sm.server_id = all_mr.server_id
+                AND sm.user_id = all_mr.user_id
+            WHERE sm.server_id = $1
+            GROUP BY sm.server_id, sm.user_id, sm.nickname, sm.joined_at
             ORDER BY sm.joined_at DESC
             "#,
         )
@@ -416,13 +444,7 @@ impl MemberRepository for PgMemberRepository {
         .fetch_all(&self.pool)
         .await?;
 
-        let mut members = Vec::with_capacity(rows.len());
-        for row in rows {
-            let roles = self.load_member_roles(server_id, row.user_id).await?;
-            members.push(row.into_member(roles));
-        }
-
-        Ok(members)
+        Ok(rows.into_iter().map(|r| r.into_member()).collect())
     }
 }
 

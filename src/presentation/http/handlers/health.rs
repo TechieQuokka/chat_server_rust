@@ -167,7 +167,7 @@ async fn check_redis(state: &AppState) -> ServiceHealth {
     let start = Instant::now();
     let mut conn = state.redis.clone();
     match redis::cmd("PING")
-        .query_async::<_, String>(&mut conn)
+        .query_async::<String>(&mut conn)
         .await
     {
         Ok(_) => {

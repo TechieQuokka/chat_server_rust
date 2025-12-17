@@ -1,14 +1,18 @@
 //! WebSocket Connection Handler
 //!
 //! Handles individual WebSocket connections with Discord-compatible protocol.
+//! Includes security measures:
+//! - Message size limits to prevent DoS
+//! - Connection timeout for identify
+//! - Heartbeat monitoring
 
 use std::sync::Arc;
 use std::time::Duration;
 
 use axum::{
     extract::{
-        ws::{Message, WebSocket},
-        State, WebSocketUpgrade,
+        ws::{Message, WebSocket, WebSocketUpgrade},
+        State,
     },
     response::Response,
 };
@@ -34,9 +38,14 @@ struct Claims {
     exp: usize,
 }
 
-/// WebSocket upgrade handler
+/// WebSocket upgrade handler with message size limits
 pub async fn ws_handler(ws: WebSocketUpgrade, State(state): State<AppState>) -> Response {
-    ws.on_upgrade(move |socket| handle_socket(socket, state))
+    let max_message_size = state.settings.websocket.max_message_size;
+    let max_frame_size = state.settings.websocket.max_frame_size;
+
+    ws.max_message_size(max_message_size)
+        .max_frame_size(max_frame_size)
+        .on_upgrade(move |socket| handle_socket(socket, state))
 }
 
 /// Handle individual WebSocket connection
@@ -44,7 +53,15 @@ async fn handle_socket(socket: WebSocket, state: AppState) {
     let session_id = Uuid::new_v4().to_string();
     let mut session_state = SessionState::new(session_id.clone());
 
-    tracing::debug!(session_id = %session_id, "New WebSocket connection");
+    // Get configured timeouts
+    let identify_timeout_secs = state.settings.websocket.identify_timeout_secs;
+    let heartbeat_interval_ms = state.settings.websocket.heartbeat_interval_ms;
+
+    tracing::debug!(
+        session_id = %session_id,
+        max_message_size = state.settings.websocket.max_message_size,
+        "New WebSocket connection"
+    );
 
     // Split socket for concurrent read/write
     let (mut sender, mut receiver) = socket.split();
@@ -52,23 +69,33 @@ async fn handle_socket(socket: WebSocket, state: AppState) {
     // Create channel for outgoing messages
     let (tx, mut rx) = mpsc::unbounded_channel::<GatewaySend>();
 
-    // Send Hello message immediately
+    // Send Hello message immediately with configured heartbeat interval
+    let hello_payload = match serde_json::to_value(HelloPayload {
+        heartbeat_interval: heartbeat_interval_ms,
+    }) {
+        Ok(v) => v,
+        Err(e) => {
+            tracing::error!("Failed to serialize HelloPayload: {}", e);
+            return;
+        }
+    };
+
     let hello = GatewaySend {
         op: OpCode::Hello as u8,
-        d: Some(
-            serde_json::to_value(HelloPayload {
-                heartbeat_interval: state.gateway.heartbeat_interval(),
-            })
-            .unwrap(),
-        ),
+        d: Some(hello_payload),
         s: None,
         t: None,
     };
 
-    if let Err(e) = sender
-        .send(Message::Text(serde_json::to_string(&hello).unwrap().into()))
-        .await
-    {
+    let hello_json = match serde_json::to_string(&hello) {
+        Ok(j) => j,
+        Err(e) => {
+            tracing::error!("Failed to serialize Hello message: {}", e);
+            return;
+        }
+    };
+
+    if let Err(e) = sender.send(Message::Text(hello_json.into())).await {
         tracing::error!("Failed to send Hello: {}", e);
         return;
     }
@@ -89,8 +116,8 @@ async fn handle_socket(socket: WebSocket, state: AppState) {
         }
     });
 
-    // Wait for Identify (with timeout)
-    let identify_timeout = Duration::from_secs(30);
+    // Wait for Identify (with configured timeout)
+    let identify_timeout = Duration::from_secs(identify_timeout_secs);
     let identify_result = timeout(identify_timeout, async {
         while let Some(msg) = receiver.next().await {
             match msg {
@@ -197,17 +224,24 @@ async fn handle_socket(socket: WebSocket, state: AppState) {
 
     // Send READY event
     let ready_sequence = session_state.next_sequence();
+    let ready_payload = match serde_json::to_value(ReadyPayload {
+        v: 10,
+        user: user_info,
+        guilds,
+        session_id: session_id.clone(),
+    }) {
+        Ok(v) => v,
+        Err(e) => {
+            tracing::error!("Failed to serialize ReadyPayload: {}", e);
+            state.gateway.unregister_session(&session_id);
+            sender_task.abort();
+            return;
+        }
+    };
+
     let ready = GatewaySend {
         op: OpCode::Dispatch as u8,
-        d: Some(
-            serde_json::to_value(ReadyPayload {
-                v: 10,
-                user: user_info,
-                guilds,
-                session_id: session_id.clone(),
-            })
-            .unwrap(),
-        ),
+        d: Some(ready_payload),
         s: Some(ready_sequence),
         t: Some("READY".to_string()),
     };
@@ -227,9 +261,9 @@ async fn handle_socket(socket: WebSocket, state: AppState) {
     // Subscribe to gateway events
     let mut event_rx = state.gateway.subscribe();
 
-    // Heartbeat interval
-    let heartbeat_interval_ms = state.gateway.heartbeat_interval();
-    let mut heartbeat_check = interval(Duration::from_millis(heartbeat_interval_ms + 10000));
+    // Heartbeat check interval (heartbeat + grace period)
+    let grace_period_ms = 10000_u64; // 10 second grace period
+    let mut heartbeat_check = interval(Duration::from_millis(heartbeat_interval_ms + grace_period_ms));
     heartbeat_check.tick().await; // Skip first immediate tick
 
     // Main message loop
@@ -316,7 +350,7 @@ async fn handle_socket(socket: WebSocket, state: AppState) {
 
             // Check heartbeat timeout
             _ = heartbeat_check.tick() => {
-                let timeout_ms = heartbeat_interval_ms + 10000; // 10 second grace period
+                let timeout_ms = heartbeat_interval_ms + grace_period_ms;
                 if !session_state.is_alive(timeout_ms) {
                     tracing::info!(
                         session_id = %session_id,

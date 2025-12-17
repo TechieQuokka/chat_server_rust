@@ -159,6 +159,17 @@ where
     }
 
     async fn check_guild_permission(&self, guild_id: i64, user_id: i64) -> Result<bool, ChannelError> {
+        // First, check if user is a member of the guild
+        let is_member = self
+            .member_repo
+            .is_member(guild_id, user_id)
+            .await
+            .map_err(|e| ChannelError::Internal(e.to_string()))?;
+
+        if !is_member {
+            return Err(ChannelError::Forbidden);
+        }
+
         // Check if user is owner (simplified - full implementation would check manage_channels permission)
         let server = self
             .server_repo

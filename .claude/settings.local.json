@@ -11,7 +11,11 @@
       "Bash(git branch:*)",
       "Bash(git remote add:*)",
       "Bash(git push:*)",
-      "Bash(cargo test:*)"
+      "Bash(cargo test:*)",
+      "Bash(git commit -m \"$(cat <<''EOF''\nfeat: Phase 8 & 9 - Observability, Security Headers, Testing\n\nPhase 8 - Cross-Cutting Concerns:\n- Prometheus metrics (HTTP counters, latency histograms, WS gauges)\n- Kubernetes-style health probes (/health/live, /health/ready)\n- Security headers middleware (HSTS, CSP, X-Frame-Options, etc.)\n- /metrics endpoint for Prometheus scraping\n\nPhase 9 - Testing:\n- 339 unit tests passing\n- Comprehensive domain tests (Snowflake, Permissions, Entities)\n- Permission service tests\n- Infrastructure tests (Cache, Metrics, Rate Limiter)\n- Integration test infrastructure (TestApp, test utilities)\n- API endpoint test structure (Health, Auth)\n\nTechnical changes:\n- Added prometheus and once_cell dependencies\n- Added fake, pretty_assertions, test-case dev-dependencies\n- Created src/infrastructure/metrics module\n- Created src/presentation/middleware/security module\n- Enhanced health handlers with DB/Redis connectivity checks\n- Fixed snowflake generator sequence race condition\n- Fixed unsafe memory tests in cache_service\n\n🤖 Generated with [Claude Code](https://claude.com/claude-code)\n\nCo-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>\nEOF\n)\")",
+      "mcp__filesystem__directory_tree",
+      "Bash(cargo fix:*)",
+      "WebSearch"
     ]
   }
 }

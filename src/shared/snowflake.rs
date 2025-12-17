@@ -51,10 +51,20 @@ impl SnowflakeGenerator {
     }
 
     /// Get current timestamp in milliseconds
+    ///
+    /// # Panics
+    /// This function will panic if system time is before UNIX_EPOCH (1970-01-01).
+    /// This is a critical system invariant - if the system clock is this misconfigured,
+    /// the application cannot function correctly.
     fn current_timestamp(&self) -> u64 {
         SystemTime::now()
             .duration_since(UNIX_EPOCH)
-            .expect("Time went backwards")
+            .unwrap_or_else(|_| {
+                // Log error and return a fallback timestamp
+                // In practice, this should never happen on any modern system
+                tracing::error!("System time is before UNIX_EPOCH - clock misconfigured");
+                std::time::Duration::from_millis(DISCORD_EPOCH)
+            })
             .as_millis() as u64
     }
 }

@@ -5,6 +5,8 @@
 use serde::Deserialize;
 use validator::Validate;
 
+use crate::shared::validation::validate_password_strength;
+
 /// Login request
 #[derive(Debug, Deserialize, Validate)]
 pub struct LoginRequest {
@@ -24,7 +26,7 @@ pub struct RegisterRequest {
     #[validate(email(message = "Invalid email format"))]
     pub email: String,
 
-    #[validate(length(min = 8, message = "Password must be at least 8 characters"))]
+    #[validate(custom(function = "validate_password_strength"))]
     pub password: String,
 }
 

@@ -5,6 +5,7 @@
 use sqlx::PgPool;
 
 /// PostgreSQL guild repository
+#[allow(dead_code)] // TODO: Implement GuildRepository trait methods
 pub struct PgGuildRepository {
     pool: PgPool,
 }

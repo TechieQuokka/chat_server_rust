@@ -27,6 +27,9 @@ pub struct Settings {
     /// CORS configuration
     pub cors: CorsSettings,
 
+    /// WebSocket configuration
+    pub websocket: WebSocketSettings,
+
     /// Current environment (development, staging, production)
     pub environment: String,
 }
@@ -107,6 +110,26 @@ pub struct CorsSettings {
     pub allowed_origins: Vec<String>,
 }
 
+/// WebSocket configuration.
+#[derive(Debug, Clone, Deserialize)]
+pub struct WebSocketSettings {
+    /// Maximum message size in bytes (default: 64KB)
+    /// Protects against DoS via oversized messages
+    pub max_message_size: usize,
+
+    /// Maximum frame size in bytes (default: 16KB)
+    pub max_frame_size: usize,
+
+    /// Heartbeat interval in milliseconds (default: 45000)
+    pub heartbeat_interval_ms: u64,
+
+    /// Connection timeout for identify in seconds (default: 30)
+    pub identify_timeout_secs: u64,
+}
+
+/// Minimum required length for JWT secret (256 bits = 32 bytes)
+pub const MIN_JWT_SECRET_LENGTH: usize = 32;
+
 impl Settings {
     /// Load settings from environment variables and configuration files.
     ///
@@ -117,7 +140,8 @@ impl Settings {
     ///
     /// # Errors
     ///
-    /// Returns `ConfigError` if configuration cannot be loaded or parsed.
+    /// Returns `ConfigError` if configuration cannot be loaded or parsed,
+    /// or if JWT secret is too short.
     pub fn load() -> Result<Self, ConfigError> {
         // Load .env file if present (ignore errors if not found)
         let _ = dotenvy::dotenv();
@@ -141,6 +165,11 @@ impl Settings {
             .set_default("rate_limit.requests_per_second", 10.0)?
             .set_default("rate_limit.burst_size", 30)?
             .set_default("cors.allowed_origins", vec!["http://localhost:3000"])?
+            // WebSocket settings - security limits to prevent DoS
+            .set_default("websocket.max_message_size", 65536_i64)? // 64KB
+            .set_default("websocket.max_frame_size", 16384_i64)?   // 16KB
+            .set_default("websocket.heartbeat_interval_ms", 45000_i64)?
+            .set_default("websocket.identify_timeout_secs", 30_i64)?
             // Load from config files
             .add_source(File::with_name("config/default").required(false))
             .add_source(File::with_name(&format!("config/{}", environment)).required(false))
@@ -179,6 +208,17 @@ impl Settings {
             )?
             .build()?
             .try_deserialize()
+            .and_then(|settings: Self| {
+                // Validate JWT secret length for security
+                if settings.jwt.secret.len() < MIN_JWT_SECRET_LENGTH {
+                    return Err(ConfigError::Message(format!(
+                        "JWT secret must be at least {} characters for security. Current length: {}",
+                        MIN_JWT_SECRET_LENGTH,
+                        settings.jwt.secret.len()
+                    )));
+                }
+                Ok(settings)
+            })
     }
 
     /// Get the full server address as a string.

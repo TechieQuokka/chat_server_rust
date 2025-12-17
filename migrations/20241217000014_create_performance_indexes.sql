@@ -83,7 +83,7 @@ CREATE INDEX IF NOT EXISTS idx_server_members_voice_active
 -- Includes common columns to avoid heap fetches
 CREATE INDEX IF NOT EXISTS idx_messages_list_covering
     ON messages(channel_id, created_at DESC)
-    INCLUDE (author_id, content, type, pinned, edited_at)
+    INCLUDE (author_id, content, message_type, pinned, edited_at)
     WHERE deleted_at IS NULL;
 
 COMMENT ON INDEX idx_messages_list_covering IS
@@ -119,9 +119,9 @@ CREATE INDEX IF NOT EXISTS idx_messages_created_brin
 COMMENT ON INDEX idx_messages_created_brin IS
     'BRIN index for efficient time-range queries on messages';
 
--- BRIN index for audit logs
+-- BRIN index for audit logs (using audit_logs_v2 table)
 CREATE INDEX IF NOT EXISTS idx_audit_logs_created_brin
-    ON audit_logs USING BRIN(created_at)
+    ON audit_logs_v2 USING BRIN(created_at)
     WITH (pages_per_range = 128);
 
 -- ============================================
@@ -176,7 +176,7 @@ ANALYZE roles;
 ANALYZE server_members;
 ANALYZE member_roles;
 ANALYZE invites;
-ANALYZE audit_logs;
+ANALYZE audit_logs_v2;
 
 -- ============================================
 -- Helpful Comments for Developers
