@@ -52,7 +52,7 @@ sha2 = "0.10"
 dashmap = "5.0"
 thiserror = "1.0"
 anyhow = "1.0"
-validator = { version = "0.18", features = ["derive"] }
+validator = { version = "0.20", features = ["derive"] }
 futures = "0.3"
 async-trait = "0.1"
 parking_lot = "0.12"
