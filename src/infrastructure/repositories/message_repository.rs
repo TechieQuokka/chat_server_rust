@@ -103,7 +103,7 @@ impl MessageRepository for PgMessageRepository {
                    message_type::text as message_type, reply_to_id,
                    pinned, edited_at, created_at
             FROM messages
-            WHERE id = $1
+            WHERE id = $1 AND deleted_at IS NULL
             "#,
         )
         .bind(id)
@@ -142,7 +142,7 @@ impl MessageRepository for PgMessageRepository {
                            message_type::text as message_type, reply_to_id,
                            pinned, edited_at, created_at
                     FROM messages
-                    WHERE channel_id = $1 AND id < $2
+                    WHERE channel_id = $1 AND id < $2 AND deleted_at IS NULL
                     ORDER BY id DESC
                     LIMIT $3
                     "#,
@@ -161,7 +161,7 @@ impl MessageRepository for PgMessageRepository {
                            message_type::text as message_type, reply_to_id,
                            pinned, edited_at, created_at
                     FROM messages
-                    WHERE channel_id = $1 AND id > $2
+                    WHERE channel_id = $1 AND id > $2 AND deleted_at IS NULL
                     ORDER BY id ASC
                     LIMIT $3
                     "#,
@@ -180,7 +180,7 @@ impl MessageRepository for PgMessageRepository {
                            message_type::text as message_type, reply_to_id,
                            pinned, edited_at, created_at
                     FROM messages
-                    WHERE channel_id = $1
+                    WHERE channel_id = $1 AND deleted_at IS NULL
                     ORDER BY id DESC
                     LIMIT $2
                     "#,
@@ -206,7 +206,7 @@ impl MessageRepository for PgMessageRepository {
                    message_type::text as message_type, reply_to_id,
                    pinned, edited_at, created_at
             FROM messages
-            WHERE channel_id = $1 AND pinned = TRUE
+            WHERE channel_id = $1 AND pinned = TRUE AND deleted_at IS NULL
             ORDER BY created_at DESC
             "#,
         )
@@ -254,7 +254,7 @@ impl MessageRepository for PgMessageRepository {
             r#"
             UPDATE messages
             SET content = $2, edited_at = NOW()
-            WHERE id = $1
+            WHERE id = $1 AND deleted_at IS NULL
             RETURNING id, channel_id, author_id, content,
                       message_type::text as message_type, reply_to_id,
                       pinned, edited_at, created_at
@@ -268,11 +268,13 @@ impl MessageRepository for PgMessageRepository {
         Ok(row.into_message())
     }
 
-    /// Delete a message.
+    /// Soft delete a message.
     ///
-    /// This permanently removes the message. Consider soft deletes for production.
+    /// Sets deleted_at timestamp instead of removing the row.
     async fn delete(&self, id: i64) -> Result<(), AppError> {
-        let result = sqlx::query("DELETE FROM messages WHERE id = $1")
+        let result = sqlx::query(
+            "UPDATE messages SET deleted_at = NOW() WHERE id = $1 AND deleted_at IS NULL"
+        )
             .bind(id)
             .execute(&self.pool)
             .await?;

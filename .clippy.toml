@@ -1,0 +1,29 @@
+# Clippy configuration
+# https://doc.rust-lang.org/clippy/configuration.html
+
+# The minimum rust version that the project supports
+msrv = "1.75.0"
+
+# Don't warn about large error types
+type-complexity-threshold = 250
+
+# Maximum number of single char bindings
+single-char-binding-names-threshold = 4
+
+# Maximum cognitive complexity
+cognitive-complexity-threshold = 30
+
+# Maximum lines for a function
+too-many-lines-threshold = 100
+
+# Warn if a doc comment is too long
+doc-valid-idents = ["ChatServer", "WebSocket", "PostgreSQL", "Redis", "UUID"]
+
+# Allowed names for variables
+allowed-idents-below-min-chars = ["x", "y", "id", "tx", "rx", "db"]
+
+# Configuration for struct excessive bools
+max-struct-bools = 3
+
+# Configuration for fn params excessive bools
+max-fn-params-bools = 3

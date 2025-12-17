@@ -1,0 +1,165 @@
+name: Code Quality
+
+on:
+  pull_request:
+    branches:
+      - main
+  push:
+    branches:
+      - main
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  lint:
+    name: Lint and Format Check
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - name: Cache cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-lint-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Check formatting
+        run: cargo fmt --all -- --check
+
+      - name: Run Clippy
+        run: cargo clippy --all-targets --all-features -- -D warnings
+
+      - name: Check for TODO/FIXME comments
+        run: |
+          # Find TODO and FIXME comments (informational only)
+          echo "Checking for TODO/FIXME comments..."
+          grep -rn "TODO\|FIXME" src/ || echo "No TODO/FIXME found"
+
+  docs:
+    name: Documentation Check
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-docs-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Build documentation
+        run: cargo doc --no-deps --all-features
+        env:
+          RUSTDOCFLAGS: "-D warnings"
+
+      - name: Check for broken doc links
+        run: |
+          cargo rustdoc --all-features -- -D rustdoc::broken-intra-doc-links
+
+  unused-deps:
+    name: Check Unused Dependencies
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@nightly
+
+      - name: Install cargo-udeps
+        run: cargo install cargo-udeps --locked
+
+      - name: Check for unused dependencies
+        run: cargo +nightly udeps --all-targets
+        continue-on-error: true
+
+  typos:
+    name: Check for Typos
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Check for typos
+        uses: crate-ci/typos@master
+        with:
+          files: src/ README.md
+
+  complexity:
+    name: Code Complexity Analysis
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install cargo-geiger (security audit)
+        run: cargo install cargo-geiger --locked
+
+      - name: Run unsafe code analysis
+        run: cargo geiger --all-targets
+        continue-on-error: true
+
+      - name: Install cargo-bloat (size profiler)
+        run: cargo install cargo-bloat --locked
+
+      - name: Analyze binary bloat
+        run: |
+          cargo bloat --release --crates || echo "cargo bloat analysis failed"
+        continue-on-error: true
+
+  dependency-tree:
+    name: Dependency Tree Analysis
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install cargo-tree
+        run: cargo install cargo-tree || true
+
+      - name: Generate dependency tree
+        run: |
+          cargo tree --all-features > dependency-tree.txt
+          echo "Top-level dependencies:"
+          cargo tree --depth 1
+
+      - name: Check for duplicate dependencies
+        run: |
+          echo "Checking for duplicate dependencies..."
+          cargo tree --duplicates || echo "No duplicates found"
+
+      - name: Upload dependency tree
+        uses: actions/upload-artifact@v4
+        with:
+          name: dependency-tree
+          path: dependency-tree.txt
+          retention-days: 30

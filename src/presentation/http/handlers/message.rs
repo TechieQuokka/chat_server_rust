@@ -34,6 +34,7 @@ pub struct MessageQuery {
 /// Get messages from channel
 pub async fn get_messages(
     State(state): State<AppState>,
+    Extension(auth): Extension<AuthUser>,
     Path(channel_id): Path<String>,
     Query(query): Query<MessageQuery>,
 ) -> Result<Json<Vec<MessageResponse>>, AppError> {
@@ -60,10 +61,11 @@ pub async fn get_messages(
     };
 
     let messages = message_service
-        .get_messages(channel_id, query_dto)
+        .get_messages(channel_id, auth.user_id, query_dto)
         .await
         .map_err(|e| match e {
             MessageError::ChannelNotFound => AppError::NotFound("Channel not found".into()),
+            MessageError::Forbidden => AppError::Forbidden("Permission denied".into()),
             e => AppError::Internal(e.to_string()),
         })?;
 

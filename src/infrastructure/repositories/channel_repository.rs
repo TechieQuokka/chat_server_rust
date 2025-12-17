@@ -119,7 +119,7 @@ impl ChannelRepository for PgChannelRepository {
             SELECT id, server_id, name, type, topic, position, parent_id, nsfw, rate_limit_per_user,
                    created_at, updated_at
             FROM channels
-            WHERE id = $1
+            WHERE id = $1 AND deleted_at IS NULL
             "#,
         )
         .bind(id)
@@ -136,7 +136,7 @@ impl ChannelRepository for PgChannelRepository {
             SELECT id, server_id, name, type, topic, position, parent_id, nsfw, rate_limit_per_user,
                    created_at, updated_at
             FROM channels
-            WHERE server_id = $1
+            WHERE server_id = $1 AND deleted_at IS NULL
             ORDER BY position ASC
             "#,
         )
@@ -154,7 +154,7 @@ impl ChannelRepository for PgChannelRepository {
             SELECT id, server_id, name, type, topic, position, parent_id, nsfw, rate_limit_per_user,
                    created_at, updated_at
             FROM channels
-            WHERE parent_id = $1
+            WHERE parent_id = $1 AND deleted_at IS NULL
             ORDER BY position ASC
             "#,
         )

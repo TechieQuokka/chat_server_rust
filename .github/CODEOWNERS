@@ -1,0 +1,62 @@
+# CODEOWNERS file defines who is responsible for code in the repository
+# https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
+
+# Default owners for everything in the repo
+# These owners will be requested for review when someone opens a pull request
+*       @example/chat-server-team
+
+# Workflow and CI/CD configuration
+/.github/       @example/devops-team
+/.github/workflows/     @example/devops-team
+/.github/dependabot.yml @example/devops-team
+
+# Docker configuration
+/Dockerfile    @example/devops-team
+/docker-compose.yml    @example/devops-team
+/.dockerignore @example/devops-team
+
+# Database migrations and schemas
+/migrations/   @example/backend-team @example/database-team
+/sqlx-data.json @example/backend-team
+
+# Configuration files
+/Cargo.toml    @example/backend-team
+/Cargo.lock    @example/backend-team
+/.env.example  @example/backend-team
+/config/       @example/backend-team
+
+# Source code by module
+/src/main.rs           @example/backend-team
+/src/config/           @example/backend-team
+/src/models/           @example/backend-team @example/database-team
+/src/handlers/         @example/backend-team
+/src/websocket/        @example/backend-team @example/realtime-team
+/src/middleware/       @example/backend-team @example/security-team
+/src/services/         @example/backend-team
+/src/utils/            @example/backend-team
+
+# Security-sensitive files
+/src/auth/             @example/security-team @example/backend-team
+/src/middleware/auth.rs @example/security-team
+/src/middleware/rate_limit.rs @example/security-team
+
+# Tests
+/tests/        @example/backend-team @example/qa-team
+/src/**/test*.rs       @example/backend-team @example/qa-team
+
+# Documentation
+/README.md     @example/docs-team
+/docs/         @example/docs-team
+/*.md          @example/docs-team
+
+# API specifications (if present)
+/api/          @example/backend-team @example/docs-team
+/openapi.yaml  @example/backend-team @example/docs-team
+
+# Security policies
+/SECURITY.md   @example/security-team
+/.github/SECURITY.md   @example/security-team
+
+# License and legal
+/LICENSE       @example/legal-team
+/NOTICE        @example/legal-team

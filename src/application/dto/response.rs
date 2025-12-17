@@ -4,7 +4,7 @@
 
 use serde::Serialize;
 
-use crate::application::services::{AuthTokens, UserDto, GuildDto, ChannelDto, MessageDto, MemberDto};
+use crate::application::services::{AuthTokens, UserDto, GuildDto, ChannelDto, MessageDto, MemberDto, RoleDto};
 use crate::domain::User;
 
 /// Authentication tokens response
@@ -213,4 +213,162 @@ pub struct ErrorResponse {
 pub struct FieldError {
     pub field: String,
     pub message: String,
+}
+
+/// Invite response (full details for invite creator/manager)
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct InviteResponse {
+    /// The unique invite code
+    pub code: String,
+    /// Guild/server information
+    pub guild: InviteGuildInfo,
+    /// Channel information
+    pub channel: InviteChannelInfo,
+    /// User who created the invite (if available)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub inviter: Option<InviteUserInfo>,
+    /// Maximum number of uses (0 = unlimited)
+    pub max_uses: i32,
+    /// Current number of uses
+    pub uses: i32,
+    /// Duration in seconds before expiration (0 = never)
+    pub max_age: i32,
+    /// Whether this invite grants temporary membership
+    pub temporary: bool,
+    /// When the invite expires (ISO 8601 format, null if never)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub expires_at: Option<String>,
+    /// When the invite was created (ISO 8601 format)
+    pub created_at: String,
+}
+
+/// Invite preview response (public info for potential joiners)
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct InvitePreviewResponse {
+    /// The unique invite code
+    pub code: String,
+    /// Guild/server information
+    pub guild: InviteGuildInfo,
+    /// Channel information
+    pub channel: InviteChannelInfo,
+    /// User who created the invite (if available)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub inviter: Option<InviteUserInfo>,
+    /// Approximate member count
+    pub approximate_member_count: i64,
+    /// When the invite expires (ISO 8601 format, null if never)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub expires_at: Option<String>,
+}
+
+/// Guild info embedded in invite response
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct InviteGuildInfo {
+    pub id: String,
+    pub name: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub icon_url: Option<String>,
+}
+
+/// Channel info embedded in invite response
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct InviteChannelInfo {
+    pub id: String,
+    pub name: String,
+    #[serde(rename = "type")]
+    pub channel_type: String,
+}
+
+/// User info embedded in invite response
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct InviteUserInfo {
+    pub id: String,
+    pub username: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub avatar_url: Option<String>,
+}
+
+/// Response when successfully joining a server via invite
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct InviteAcceptResponse {
+    /// The guild that was joined
+    pub guild: GuildResponse,
+}
+
+// =============================================================================
+// Role Responses
+// =============================================================================
+
+/// Role response
+#[derive(Debug, Serialize)]
+pub struct RoleResponse {
+    /// Role ID (snowflake)
+    pub id: String,
+    /// Guild/server ID this role belongs to
+    pub guild_id: String,
+    /// Role name
+    pub name: String,
+    /// Permission bitfield as string (for JavaScript BigInt compatibility)
+    pub permissions: String,
+    /// Position in the role hierarchy (higher = more priority)
+    pub position: i32,
+    /// Role color as RGB integer (null for default/no color)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub color: Option<i32>,
+    /// Whether members are displayed separately in the member list
+    pub hoist: bool,
+    /// Whether this role can be mentioned by everyone
+    pub mentionable: bool,
+    /// Whether this is a managed role (bot roles, integrations)
+    pub managed: bool,
+    /// Role creation timestamp (ISO 8601 format)
+    pub created_at: String,
+}
+
+impl From<RoleDto> for RoleResponse {
+    fn from(dto: RoleDto) -> Self {
+        Self {
+            id: dto.id,
+            guild_id: dto.server_id,
+            name: dto.name,
+            permissions: dto.permissions,
+            position: dto.position,
+            color: dto.color,
+            hoist: dto.hoist,
+            mentionable: dto.mentionable,
+            managed: dto.managed,
+            created_at: dto.created_at,
+        }
+    }
+}
+
+/// Partial role response (for embedding in other responses)
+#[derive(Debug, Serialize)]
+pub struct PartialRoleResponse {
+    /// Role ID
+    pub id: String,
+    /// Role name
+    pub name: String,
+    /// Role color
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub color: Option<i32>,
+    /// Position in hierarchy
+    pub position: i32,
+}
+
+impl From<RoleDto> for PartialRoleResponse {
+    fn from(dto: RoleDto) -> Self {
+        Self {
+            id: dto.id,
+            name: dto.name,
+            color: dto.color,
+            position: dto.position,
+        }
+    }
 }

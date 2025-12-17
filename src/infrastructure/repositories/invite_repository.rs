@@ -7,6 +7,7 @@ use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use sqlx::PgPool;
 
+use crate::domain::{Invite, InviteRepository as DomainInviteRepository};
 use crate::shared::error::AppError;
 
 /// Invite entity representing a server invite link.
@@ -34,6 +35,24 @@ pub struct InviteEntity {
     pub expires_at: Option<DateTime<Utc>>,
     /// When the invite was created
     pub created_at: DateTime<Utc>,
+}
+
+impl InviteEntity {
+    /// Convert to domain Invite entity.
+    pub fn into_invite(self) -> Invite {
+        Invite {
+            code: self.code,
+            server_id: self.server_id,
+            channel_id: self.channel_id,
+            inviter_id: self.inviter_id,
+            max_uses: self.max_uses,
+            uses: self.uses,
+            max_age: self.max_age,
+            temporary: self.temporary,
+            expires_at: self.expires_at,
+            created_at: self.created_at,
+        }
+    }
 }
 
 /// Input for creating a new invite.
@@ -194,7 +213,7 @@ impl InviteRepository for PgInviteRepository {
 
         if result.rows_affected() == 0 {
             // Either invite doesn't exist or is no longer valid
-            let invite = self.find_by_code(code).await?;
+            let invite = InviteRepository::find_by_code(self, code).await?;
             match invite {
                 None => return Err(AppError::NotFound(format!("Invite {} not found", code))),
                 Some(inv) => {
@@ -370,7 +389,7 @@ impl PgInviteRepository {
                 i.uses,
                 i.max_uses,
                 i.expires_at,
-                (SELECT COUNT(*) FROM members WHERE server_id = s.id) as member_count
+                (SELECT COUNT(*) FROM server_members WHERE server_id = s.id) as member_count
             FROM invites i
             INNER JOIN servers s ON i.server_id = s.id
             INNER JOIN channels c ON i.channel_id = c.id
@@ -452,6 +471,62 @@ pub struct InvitePreview {
     pub max_uses: i32,
     pub expires_at: Option<DateTime<Utc>>,
     pub member_count: i64,
+}
+
+// Domain trait implementation
+#[async_trait]
+impl DomainInviteRepository for PgInviteRepository {
+    async fn find_by_code(&self, code: &str) -> Result<Option<Invite>, AppError> {
+        let entity = InviteRepository::find_by_code(self, code).await?;
+        Ok(entity.map(|e| e.into_invite()))
+    }
+
+    async fn find_by_server_id(&self, server_id: i64) -> Result<Vec<Invite>, AppError> {
+        let entities = InviteRepository::find_by_server_id(self, server_id).await?;
+        Ok(entities.into_iter().map(|e| e.into_invite()).collect())
+    }
+
+    async fn find_by_channel_id(&self, channel_id: i64) -> Result<Vec<Invite>, AppError> {
+        let entities = self.find_by_channel_id(channel_id).await?;
+        Ok(entities.into_iter().map(|e| e.into_invite()).collect())
+    }
+
+    async fn find_by_inviter_id(&self, inviter_id: i64) -> Result<Vec<Invite>, AppError> {
+        let entities = self.find_by_inviter_id(inviter_id).await?;
+        Ok(entities.into_iter().map(|e| e.into_invite()).collect())
+    }
+
+    async fn create(&self, invite: &Invite) -> Result<Invite, AppError> {
+        let create_input = CreateInvite {
+            code: invite.code.clone(),
+            server_id: invite.server_id,
+            channel_id: invite.channel_id,
+            inviter_id: invite.inviter_id,
+            max_uses: invite.max_uses,
+            max_age: invite.max_age,
+            temporary: invite.temporary,
+        };
+        let entity = InviteRepository::create(self, &create_input).await?;
+        Ok(entity.into_invite())
+    }
+
+    async fn delete(&self, code: &str) -> Result<(), AppError> {
+        InviteRepository::delete(self, code).await
+    }
+
+    async fn increment_uses(&self, code: &str) -> Result<(), AppError> {
+        InviteRepository::increment_uses(self, code).await
+    }
+
+    async fn delete_expired(&self) -> Result<i64, AppError> {
+        let count = self.delete_expired().await?;
+        Ok(count as i64)
+    }
+
+    async fn code_exists(&self, code: &str) -> Result<bool, AppError> {
+        let invite = InviteRepository::find_by_code(self, code).await?;
+        Ok(invite.is_some())
+    }
 }
 
 #[cfg(test)]

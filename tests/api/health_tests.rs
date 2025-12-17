@@ -1,11 +1,7 @@
 //! Health Check API Tests
-
-use axum::{
-    body::Body,
-    http::{Request, StatusCode},
-    Router,
-};
-use tower::ServiceExt;
+//!
+//! Placeholder tests for health check endpoints.
+//! TODO: Implement full integration tests with TestApp infrastructure.
 
 /// Test basic health check endpoint returns 200 OK
 #[tokio::test]

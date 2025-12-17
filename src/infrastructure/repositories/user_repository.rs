@@ -69,7 +69,7 @@ impl UserRepository for PgUserRepository {
             SELECT id, username, email, password_hash, display_name, avatar_url,
                    status, bio, created_at, updated_at
             FROM users
-            WHERE id = $1
+            WHERE id = $1 AND deleted_at IS NULL
             "#,
         )
         .bind(id)
@@ -86,7 +86,7 @@ impl UserRepository for PgUserRepository {
             SELECT id, username, email, password_hash, display_name, avatar_url,
                    status, bio, created_at, updated_at
             FROM users
-            WHERE email = $1
+            WHERE email = $1 AND deleted_at IS NULL
             "#,
         )
         .bind(email)
@@ -103,7 +103,7 @@ impl UserRepository for PgUserRepository {
             SELECT id, username, email, password_hash, display_name, avatar_url,
                    status, bio, created_at, updated_at
             FROM users
-            WHERE username = $1
+            WHERE username = $1 AND deleted_at IS NULL
             "#,
         )
         .bind(username)

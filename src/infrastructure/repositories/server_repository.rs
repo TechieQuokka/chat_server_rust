@@ -63,7 +63,7 @@ impl ServerRepository for PgServerRepository {
             r#"
             SELECT id, name, owner_id, icon_url, description, created_at, updated_at
             FROM servers
-            WHERE id = $1
+            WHERE id = $1 AND deleted_at IS NULL
             "#,
         )
         .bind(id)
@@ -80,7 +80,7 @@ impl ServerRepository for PgServerRepository {
             SELECT s.id, s.name, s.owner_id, s.icon_url, s.description, s.created_at, s.updated_at
             FROM servers s
             INNER JOIN server_members sm ON s.id = sm.server_id
-            WHERE sm.user_id = $1
+            WHERE sm.user_id = $1 AND s.deleted_at IS NULL
             ORDER BY sm.joined_at DESC
             "#,
         )
@@ -97,7 +97,7 @@ impl ServerRepository for PgServerRepository {
             r#"
             SELECT id, name, owner_id, icon_url, description, created_at, updated_at
             FROM servers
-            WHERE owner_id = $1
+            WHERE owner_id = $1 AND deleted_at IS NULL
             ORDER BY created_at DESC
             "#,
         )

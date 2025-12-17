@@ -154,9 +154,9 @@ impl Settings {
             .set_default("environment", environment.clone())?
             .set_default("server.host", "0.0.0.0")?
             .set_default("server.port", 3000)?
-            .set_default("database.max_connections", 10)?
-            .set_default("database.min_connections", 2)?
-            .set_default("database.acquire_timeout", 30)?
+            .set_default("database.max_connections", 50)?
+            .set_default("database.min_connections", 5)?
+            .set_default("database.acquire_timeout", 10)?
             .set_default("redis.pool_size", 10)?
             .set_default("jwt.access_token_expiry_minutes", 15)?
             .set_default("jwt.refresh_token_expiry_days", 7)?

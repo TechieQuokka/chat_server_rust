@@ -57,10 +57,13 @@ fn api_routes(state: AppState) -> Router<AppState> {
     Router::new()
         // Public routes (auth has its own stricter rate limiting)
         .nest("/auth", auth_routes(state.clone()))
+        // Public invite preview (no auth required)
+        .route("/invites/:code", get(handlers::invite::get_invite))
         // Protected routes (require authentication)
         .nest("/users", user_routes(state.clone()))
         .nest("/guilds", guild_routes(state.clone()))
         .nest("/channels", channel_routes(state.clone()))
+        .nest("/invites", invite_routes(state.clone()))
         // Apply API rate limiting to all API routes
         .route_layer(middleware::from_fn_with_state(state, rate_limit_api))
 }
@@ -96,6 +99,9 @@ fn guild_routes(state: AppState) -> Router<AppState> {
         .route("/:guild_id/channels", get(handlers::guild::get_guild_channels))
         .route("/:guild_id/channels", post(handlers::channel::create_channel))
         .route("/:guild_id/members", get(handlers::guild::get_guild_members))
+        // Invite routes nested under guilds
+        .route("/:guild_id/invites", post(handlers::invite::create_invite))
+        .route("/:guild_id/invites", get(handlers::invite::list_guild_invites))
         .route_layer(middleware::from_fn_with_state(state, auth_middleware))
 }
 
@@ -107,5 +113,15 @@ fn channel_routes(state: AppState) -> Router<AppState> {
         .route("/:channel_id", delete(handlers::channel::delete_channel))
         .route("/:channel_id/messages", get(handlers::message::get_messages))
         .route("/:channel_id/messages", post(handlers::message::send_message))
+        .route_layer(middleware::from_fn_with_state(state, auth_middleware))
+}
+
+/// Invite routes (protected - for accepting and deleting invites)
+fn invite_routes(state: AppState) -> Router<AppState> {
+    Router::new()
+        // POST /api/v1/invites/:code - Accept/use an invite
+        .route("/:code", post(handlers::invite::accept_invite))
+        // DELETE /api/v1/invites/:code - Delete an invite
+        .route("/:code", delete(handlers::invite::delete_invite))
         .route_layer(middleware::from_fn_with_state(state, auth_middleware))
 }

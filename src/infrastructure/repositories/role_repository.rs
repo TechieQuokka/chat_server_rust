@@ -69,7 +69,7 @@ impl PgRoleRepository {
                    r.hoist, r.mentionable, r.created_at, r.updated_at
             FROM roles r
             INNER JOIN member_roles mr ON r.id = mr.role_id
-            WHERE mr.server_id = $1 AND mr.user_id = $2
+            WHERE mr.server_id = $1 AND mr.user_id = $2 AND r.deleted_at IS NULL
             ORDER BY r.position DESC
             "#,
         )
@@ -118,7 +118,7 @@ impl RoleRepository for PgRoleRepository {
             SELECT id, server_id, name, permissions, position, color, hoist, mentionable,
                    created_at, updated_at
             FROM roles
-            WHERE id = $1
+            WHERE id = $1 AND deleted_at IS NULL
             "#,
         )
         .bind(id)
@@ -135,7 +135,7 @@ impl RoleRepository for PgRoleRepository {
             SELECT id, server_id, name, permissions, position, color, hoist, mentionable,
                    created_at, updated_at
             FROM roles
-            WHERE server_id = $1
+            WHERE server_id = $1 AND deleted_at IS NULL
             ORDER BY position DESC
             "#,
         )
@@ -255,7 +255,7 @@ impl RoleRepository for PgRoleRepository {
     /// Get the highest role position for a server.
     async fn get_max_position(&self, server_id: i64) -> Result<i32, AppError> {
         let max_pos = sqlx::query_scalar::<_, Option<i32>>(
-            "SELECT MAX(position) FROM roles WHERE server_id = $1",
+            "SELECT MAX(position) FROM roles WHERE server_id = $1 AND deleted_at IS NULL",
         )
         .bind(server_id)
         .fetch_one(&self.pool)

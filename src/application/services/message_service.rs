@@ -18,8 +18,8 @@ pub trait MessageService: Send + Sync {
     /// Send a message to a channel
     async fn send_message(&self, channel_id: i64, author_id: i64, request: CreateMessageDto) -> Result<MessageDto, MessageError>;
 
-    /// Get messages from a channel
-    async fn get_messages(&self, channel_id: i64, query: MessageQueryDto) -> Result<Vec<MessageDto>, MessageError>;
+    /// Get messages from a channel (requires user_id for authorization check)
+    async fn get_messages(&self, channel_id: i64, user_id: i64, query: MessageQueryDto) -> Result<Vec<MessageDto>, MessageError>;
 
     /// Get a single message
     async fn get_message(&self, channel_id: i64, message_id: i64) -> Result<MessageDto, MessageError>;
@@ -211,7 +211,12 @@ where
         Ok(MessageDto::from(created))
     }
 
-    async fn get_messages(&self, channel_id: i64, query: MessageQueryDto) -> Result<Vec<MessageDto>, MessageError> {
+    async fn get_messages(&self, channel_id: i64, user_id: i64, query: MessageQueryDto) -> Result<Vec<MessageDto>, MessageError> {
+        // Check channel access authorization
+        if !self.check_channel_access(channel_id, user_id).await? {
+            return Err(MessageError::Forbidden);
+        }
+
         let limit = query.limit.unwrap_or(50).min(100);
 
         let messages = self

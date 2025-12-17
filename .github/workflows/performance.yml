@@ -1,0 +1,98 @@
+name: Performance Testing
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  benchmark:
+    name: Benchmark
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' || github.event.pull_request.draft == false
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-bench-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Run benchmarks
+        run: |
+          # Install criterion if needed
+          cargo install cargo-criterion || true
+
+          # Run benchmarks if they exist
+          if cargo bench --help &> /dev/null; then
+            cargo bench -- --output-format bencher | tee benchmark-results.txt
+          else
+            echo "No benchmarks found"
+          fi
+
+      - name: Store benchmark results
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: benchmark-action/github-action-benchmark@v1
+        with:
+          tool: 'cargo'
+          output-file-path: benchmark-results.txt
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          auto-push: true
+
+  size-analysis:
+    name: Binary Size Analysis
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Build release binary
+        run: cargo build --release
+
+      - name: Analyze binary size
+        run: |
+          echo "Binary size analysis:"
+          ls -lh target/release/chat-server
+
+          # Install bloaty if available (size profiler)
+          if command -v bloaty &> /dev/null; then
+            bloaty target/release/chat-server
+          fi
+
+          # Show section sizes
+          size target/release/chat-server || true
+
+      - name: Comment binary size on PR
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const stats = fs.statSync('target/release/chat-server');
+            const sizeMB = (stats.size / 1024 / 1024).toFixed(2);
+
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: `### Binary Size Report\n\nRelease binary size: **${sizeMB} MB**`
+            });

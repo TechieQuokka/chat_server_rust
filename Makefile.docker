@@ -1,0 +1,238 @@
+# ============================================
+# Docker-specific Makefile targets
+# ============================================
+
+.PHONY: docker-build docker-build-no-cache docker-run docker-stop docker-clean \
+        docker-logs docker-ps docker-shell docker-test docker-prod-up docker-prod-down \
+        docker-prod-logs docker-prod-ps docker-backup docker-restore
+
+# ============================================
+# Build Commands
+# ============================================
+
+# Build Docker image with caching
+docker-build:
+	@echo "Building Docker image..."
+	docker build -t chat-server:latest .
+
+# Build Docker image without cache (clean build)
+docker-build-no-cache:
+	@echo "Building Docker image (no cache)..."
+	docker build --no-cache -t chat-server:latest .
+
+# Build with version tag
+docker-build-versioned:
+	@echo "Building Docker image with version tag..."
+	@read -p "Enter version (e.g., 1.0.0): " VERSION; \
+	docker build -t chat-server:$$VERSION -t chat-server:latest .
+
+# ============================================
+# Development Commands
+# ============================================
+
+# Run development environment
+docker-run:
+	@echo "Starting development environment..."
+	docker-compose up -d
+
+# Stop development environment
+docker-stop:
+	@echo "Stopping development environment..."
+	docker-compose down
+
+# View logs
+docker-logs:
+	docker-compose logs -f
+
+# View specific service logs
+docker-logs-server:
+	docker-compose logs -f chat-server
+
+# Show running containers
+docker-ps:
+	docker-compose ps
+
+# Shell into container
+docker-shell:
+	docker-compose exec chat-server /bin/sh
+
+# ============================================
+# Production Commands
+# ============================================
+
+# Start production environment
+docker-prod-up:
+	@echo "Starting production environment..."
+	@if [ ! -f .env ]; then \
+		echo "ERROR: .env file not found!"; \
+		echo "Copy .env.production to .env and configure it first."; \
+		exit 1; \
+	fi
+	docker-compose -f docker-compose.prod.yml up -d
+
+# Stop production environment
+docker-prod-down:
+	@echo "Stopping production environment..."
+	docker-compose -f docker-compose.prod.yml down
+
+# View production logs
+docker-prod-logs:
+	docker-compose -f docker-compose.prod.yml logs -f
+
+# View production status
+docker-prod-ps:
+	docker-compose -f docker-compose.prod.yml ps
+
+# Restart production services
+docker-prod-restart:
+	@echo "Restarting production services..."
+	docker-compose -f docker-compose.prod.yml restart
+
+# Scale production services
+docker-prod-scale:
+	@read -p "Number of instances: " COUNT; \
+	docker-compose -f docker-compose.prod.yml up -d --scale chat-server=$$COUNT
+
+# ============================================
+# Testing Commands
+# ============================================
+
+# Run tests in Docker
+docker-test:
+	@echo "Running tests in Docker..."
+	docker build --target builder -t chat-server:test .
+	docker run --rm chat-server:test cargo test --release
+
+# Run benchmarks in Docker
+docker-bench:
+	@echo "Running benchmarks in Docker..."
+	docker build --target builder -t chat-server:bench .
+	docker run --rm chat-server:bench cargo bench
+
+# ============================================
+# Maintenance Commands
+# ============================================
+
+# Backup database
+docker-backup:
+	@echo "Backing up database..."
+	@mkdir -p backups
+	@TIMESTAMP=$$(date +%Y%m%d_%H%M%S); \
+	docker-compose -f docker-compose.prod.yml exec -T postgres \
+		pg_dump -U chat_user chat_db > backups/backup_$$TIMESTAMP.sql
+	@echo "Backup saved to backups/backup_$$TIMESTAMP.sql"
+
+# Restore database
+docker-restore:
+	@echo "Available backups:"
+	@ls -1 backups/
+	@read -p "Enter backup filename: " BACKUP; \
+	docker-compose -f docker-compose.prod.yml exec -T postgres \
+		psql -U chat_user chat_db < backups/$$BACKUP
+	@echo "Database restored from backups/$$BACKUP"
+
+# Clean up Docker resources
+docker-clean:
+	@echo "Cleaning up Docker resources..."
+	docker-compose down -v
+	docker system prune -f
+
+# Deep clean (removes all images and volumes)
+docker-clean-all:
+	@echo "WARNING: This will remove all containers, images, and volumes!"
+	@read -p "Are you sure? (yes/no): " CONFIRM; \
+	if [ "$$CONFIRM" = "yes" ]; then \
+		docker-compose down -v --rmi all; \
+		docker system prune -af --volumes; \
+		echo "Deep clean complete!"; \
+	else \
+		echo "Cancelled."; \
+	fi
+
+# ============================================
+# Health & Monitoring Commands
+# ============================================
+
+# Check service health
+docker-health:
+	@echo "Checking service health..."
+	@docker-compose ps
+	@echo "\nApplication health:"
+	@curl -f http://localhost:3000/health || echo "Application not responding"
+	@echo "\n\nMetrics:"
+	@curl -s http://localhost:9100/metrics | head -20
+
+# View resource usage
+docker-stats:
+	docker stats
+
+# View detailed container info
+docker-inspect:
+	@read -p "Container name (default: chat_server_prod): " CONTAINER; \
+	CONTAINER=$${CONTAINER:-chat_server_prod}; \
+	docker inspect $$CONTAINER | less
+
+# ============================================
+# Security Commands
+# ============================================
+
+# Scan image for vulnerabilities
+docker-scan:
+	@echo "Scanning image for vulnerabilities..."
+	docker scan chat-server:latest
+
+# Check for security best practices
+docker-lint:
+	@echo "Linting Dockerfile..."
+	@if command -v hadolint >/dev/null 2>&1; then \
+		hadolint Dockerfile; \
+	else \
+		echo "hadolint not installed. Install with: brew install hadolint"; \
+	fi
+
+# ============================================
+# Help
+# ============================================
+
+docker-help:
+	@echo "Docker Makefile Commands:"
+	@echo ""
+	@echo "Build Commands:"
+	@echo "  docker-build              - Build Docker image"
+	@echo "  docker-build-no-cache     - Build without cache"
+	@echo "  docker-build-versioned    - Build with version tag"
+	@echo ""
+	@echo "Development Commands:"
+	@echo "  docker-run                - Start development environment"
+	@echo "  docker-stop               - Stop development environment"
+	@echo "  docker-logs               - View all logs"
+	@echo "  docker-logs-server        - View server logs only"
+	@echo "  docker-ps                 - Show running containers"
+	@echo "  docker-shell              - Shell into container"
+	@echo ""
+	@echo "Production Commands:"
+	@echo "  docker-prod-up            - Start production environment"
+	@echo "  docker-prod-down          - Stop production environment"
+	@echo "  docker-prod-logs          - View production logs"
+	@echo "  docker-prod-ps            - View production status"
+	@echo "  docker-prod-restart       - Restart production services"
+	@echo "  docker-prod-scale         - Scale production services"
+	@echo ""
+	@echo "Testing Commands:"
+	@echo "  docker-test               - Run tests in Docker"
+	@echo "  docker-bench              - Run benchmarks in Docker"
+	@echo ""
+	@echo "Maintenance Commands:"
+	@echo "  docker-backup             - Backup database"
+	@echo "  docker-restore            - Restore database"
+	@echo "  docker-clean              - Clean up Docker resources"
+	@echo "  docker-clean-all          - Deep clean (removes everything)"
+	@echo ""
+	@echo "Health & Monitoring:"
+	@echo "  docker-health             - Check service health"
+	@echo "  docker-stats              - View resource usage"
+	@echo "  docker-inspect            - View container details"
+	@echo ""
+	@echo "Security Commands:"
+	@echo "  docker-scan               - Scan for vulnerabilities"
+	@echo "  docker-lint               - Lint Dockerfile"

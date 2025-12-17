@@ -148,8 +148,17 @@ Discord-like Rust Chat Server 구현 프로젝트 진행 상황 추적 문서
   - [x] 메시지 전송/조회/수정/삭제
   - [x] 메시지 고정/해제
   - [x] 답장 (reply) 지원
-- [ ] `RoleService` - 역할 관리 (향후 구현)
-- [ ] `InviteService` - 초대 관리 (향후 구현)
+- [x] `RoleService` - 역할 관리
+  - [x] 역할 생성/조회/수정/삭제
+  - [x] 역할 순서 변경
+  - [x] 역할 할당/제거
+  - [x] 역할 계층 권한 검증
+- [x] `InviteService` - 초대 관리
+  - [x] 초대 생성 (max_uses, max_age, temporary)
+  - [x] 초대 조회/검증
+  - [x] 초대 사용 (서버 가입)
+  - [x] 초대 삭제
+  - [x] 만료 초대 정리
 
 ### 5.2 DTOs
 - [x] Request DTOs (CreateUserDto, CreateGuildDto, CreateChannelDto, CreateMessageDto 등)
@@ -220,7 +229,12 @@ Discord-like Rust Chat Server 구현 프로젝트 진행 상황 추적 문서
     - [x] DELETE /:channel_id - 채널 삭제
     - [x] GET /:channel_id/messages - 메시지 목록
     - [x] POST /:channel_id/messages - 메시지 전송
-  - [ ] Invites API (`/api/v1/invites/*`) (향후 구현)
+  - [x] Invites API (`/api/v1/invites/*`)
+    - [x] POST /guilds/:guild_id/invites - 초대 생성
+    - [x] GET /invites/:code - 초대 미리보기
+    - [x] POST /invites/:code - 초대 수락 (서버 가입)
+    - [x] DELETE /invites/:code - 초대 삭제
+    - [x] GET /guilds/:guild_id/invites - 서버 초대 목록
 - [x] 에러 핸들러 구현 (AppError → JSON response)
 - [ ] OpenAPI/Swagger 문서 생성 (선택)
 
@@ -332,9 +346,17 @@ Discord-like Rust Chat Server 구현 프로젝트 진행 상황 추적 문서
 ## Phase 10: Deployment
 
 ### 10.1 Containerization
-- [ ] Production Dockerfile
-- [ ] Multi-stage 빌드 최적화
-- [ ] Docker Compose (production)
+- [x] Production Dockerfile
+  - [x] Multi-stage 빌드 (rust:1.83-slim → debian:bookworm-slim)
+  - [x] 의존성 캐싱 최적화
+  - [x] Non-root 사용자 설정
+  - [x] Health check 설정
+- [x] Docker Compose (production)
+  - [x] chat-server, PostgreSQL 16, Redis 7
+  - [x] Prometheus, Jaeger 모니터링
+  - [x] 리소스 제한 및 헬스체크
+- [x] .dockerignore 최적화
+- [x] 배포 스크립트 (scripts/docker-build.sh, docker-deploy.sh)
 
 ### 10.2 Kubernetes
 - [ ] Deployment manifest
@@ -344,12 +366,15 @@ Discord-like Rust Chat Server 구현 프로젝트 진행 상황 추적 문서
 - [ ] ConfigMap / Secret
 
 ### 10.3 CI/CD
-- [ ] GitHub Actions workflow
-  - [ ] Build & Test
-  - [ ] Security Scan
-  - [ ] Docker Build & Push
-  - [ ] Deploy to Staging
-  - [ ] Deploy to Production
+- [x] GitHub Actions workflow
+  - [x] ci.yml - Build & Test (Rust stable, PostgreSQL, Redis)
+  - [x] security.yml - Security Scan (cargo-audit, Trivy, Gitleaks)
+  - [x] code-quality.yml - Code Quality (fmt, clippy, docs)
+  - [x] performance.yml - Performance Testing (Criterion)
+  - [x] docker-build.yml - Docker Build & Push (GHCR)
+- [x] Dependabot 설정 (Cargo, Actions, Docker)
+- [x] CODEOWNERS 설정
+- [x] PR 템플릿
 
 ---
 
@@ -361,12 +386,12 @@ Discord-like Rust Chat Server 구현 프로젝트 진행 상황 추적 문서
 | Phase 2: Project Setup | ✅ Completed | 100% |
 | Phase 3: Database Layer | ✅ Completed | 100% (14 migrations, 10 repositories) |
 | Phase 4: Domain Layer | ✅ Completed | 100% (9 entities, 4 value objects) |
-| Phase 5: Application Layer | ✅ Completed | 90% (5 services, DTOs) |
+| Phase 5: Application Layer | ✅ Completed | 100% (7 services, DTOs) |
 | Phase 6: Infrastructure Layer | ✅ Completed | 95% (Redis cache, Rate limiting) |
-| Phase 7: Presentation Layer | ✅ Completed | 95% (REST API, WebSocket Gateway) |
+| Phase 7: Presentation Layer | ✅ Completed | 100% (REST API, WebSocket Gateway, Invites API) |
 | Phase 8: Cross-Cutting | ✅ Completed | 95% (Observability, Security Headers) |
-| Phase 9: Testing | ✅ Completed | 90% (339 unit tests, test infrastructure) |
-| Phase 10: Deployment | Not Started | 0/? |
+| Phase 9: Testing | ✅ Completed | 90% (349 unit tests, test infrastructure) |
+| Phase 10: Deployment | ✅ Completed | 80% (Docker, CI/CD - K8s 미완료) |
 
 ---
 
@@ -427,6 +452,23 @@ Discord-like Rust Chat Server 구현 프로젝트 진행 상황 추적 문서
   - Infrastructure layer tests (Cache, Metrics, Rate Limiter)
   - Integration test infrastructure (TestApp, test utilities)
   - API endpoint test structure (Health, Auth)
+- 2024-12-18: Phase 5 서비스 계층 완성
+  - RoleService 구현 (역할 CRUD, 계층 권한, 멤버 할당)
+  - InviteService 구현 (초대 생성/검증/사용/삭제)
+  - 7개 Application Services 완성 (Auth, User, Guild, Channel, Message, Role, Invite)
+- 2024-12-18: Phase 7 Invites API 완료
+  - 5개 엔드포인트 (create, get, accept, delete, list)
+  - 권한 검증 및 초대 검증 로직
+- 2024-12-18: Phase 10 Deployment 구현
+  - Production Dockerfile (multi-stage build, 150MB 최적화)
+  - docker-compose.prod.yml (PostgreSQL 16, Redis 7, Prometheus, Jaeger)
+  - GitHub Actions CI/CD (4개 워크플로우: ci, security, code-quality, performance)
+  - Dependabot, CODEOWNERS, PR 템플릿 설정
+- 2024-12-18: Security & Performance 수정
+  - C01: get_messages 권한 검증 추가
+  - DB01: 모든 Repository에 soft delete 필터 추가
+  - DB02: invite_repository 테이블명 수정
+  - Database pool 최적화 (max: 50, min: 5)
 
 ### Pending Decisions
 - [ ] 파일 스토리지 방식 결정 (S3 vs 로컬)
@@ -434,12 +476,12 @@ Discord-like Rust Chat Server 구현 프로젝트 진행 상황 추적 문서
 - [ ] Voice 채널 지원 범위
 
 ### Technical Details
-- **총 소스 파일**: 80개+ Rust 파일
+- **총 소스 파일**: 85개+ Rust 파일
 - **SQLx 버전**: 0.8 (compile-time verified queries)
 - **Rust Edition**: 2021
 - **인증**: JWT (jsonwebtoken) + Argon2id + SHA-256 refresh token hashing
-- **Application Services**: 5개 (Auth, User, Guild, Channel, Message)
-- **REST API Endpoints**: 19개 (Auth 4개, Users 4개, Guilds 7개, Channels 5개)
+- **Application Services**: 7개 (Auth, User, Guild, Channel, Message, Role, Invite)
+- **REST API Endpoints**: 24개 (Auth 4개, Users 4개, Guilds 7개, Channels 5개, Invites 5개)
 - **HTTP Framework**: Axum 0.7 with Tower middleware
 - **WebSocket Gateway**: Discord-compatible protocol (opcodes 0-11)
 - **Session Management**: DashMap-based concurrent storage
@@ -452,8 +494,11 @@ Discord-like Rust Chat Server 구현 프로젝트 진행 상황 추적 문서
 - **Metrics**: Prometheus (prometheus crate, once_cell for lazy statics)
 - **Health Probes**: Kubernetes-style (/health/live, /health/ready)
 - **Security Headers**: 7개 (HSTS, CSP, X-Frame-Options, etc.)
-- **Unit Tests**: 339개 통과
+- **Unit Tests**: 349개 통과
+- **Integration Tests**: 14개 통과
+- **Docker Image**: ~150MB (multi-stage build optimized)
+- **CI/CD Workflows**: 4개 (ci, security, code-quality, performance)
 
 ---
 
-> Last Updated: 2024-12-17
+> Last Updated: 2024-12-18

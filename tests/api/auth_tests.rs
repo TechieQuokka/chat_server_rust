@@ -1,6 +1,7 @@
 //! Authentication API Tests
-
-use axum::http::StatusCode;
+//!
+//! Placeholder tests for authentication endpoints.
+//! TODO: Implement full integration tests with TestApp infrastructure.
 
 /// Test user registration with valid data
 #[tokio::test]
