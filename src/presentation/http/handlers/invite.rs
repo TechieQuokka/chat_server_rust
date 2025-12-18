@@ -366,7 +366,6 @@ pub async fn list_guild_invites(
     let server_repo = Arc::new(PgServerRepository::new(state.db.clone()));
     let channel_repo = Arc::new(PgChannelRepository::new(state.db.clone()));
     let member_repo = Arc::new(PgMemberRepository::new(state.db.clone()));
-    let role_repo = Arc::new(PgRoleRepository::new(state.db.clone()));
 
     // Verify user has permission (must be a member for now)
     let is_member = member_repo

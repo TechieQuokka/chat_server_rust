@@ -21,7 +21,7 @@ pub struct CreateInviteRequest {
     /// Seconds until expiration (0 = never expires).
     /// Common values: 1800 (30 min), 3600 (1 hour), 21600 (6 hours),
     /// 43200 (12 hours), 86400 (24 hours), 604800 (7 days), 0 (never)
-    #[validate(range(min = 0, max = 604800, message = "max_age must be between 0 and 604800 (7 days)"))]
+    #[validate(range(min = 0, max = 604_800, message = "max_age must be between 0 and 604800 (7 days)"))]
     pub max_age: Option<i32>,
 
     /// Whether members gain temporary membership.

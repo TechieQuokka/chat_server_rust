@@ -140,7 +140,7 @@ pub struct CreateInviteRequest {
     pub max_uses: i32,
 
     /// Duration in seconds before expiration (0 = never, max 604800 = 7 days)
-    #[validate(range(min = 0, max = 604800, message = "max_age must be between 0 and 604800 seconds"))]
+    #[validate(range(min = 0, max = 604_800, message = "max_age must be between 0 and 604800 seconds"))]
     #[serde(default)]
     pub max_age: i32,
 
@@ -159,7 +159,7 @@ pub struct CreateRoleRequest {
     #[validate(length(min = 1, max = 100, message = "Name must be 1-100 characters"))]
     pub name: String,
 
-    /// Permission bitfield (as string for JavaScript BigInt compatibility)
+    /// Permission bitfield (as string for `JavaScript` `BigInt` compatibility)
     pub permissions: Option<String>,
 
     /// Role color as RGB integer
@@ -178,7 +178,7 @@ pub struct UpdateRoleRequest {
     #[validate(length(min = 1, max = 100, message = "Name must be 1-100 characters"))]
     pub name: Option<String>,
 
-    /// Permission bitfield (as string for JavaScript BigInt compatibility)
+    /// Permission bitfield (as string for `JavaScript` `BigInt` compatibility)
     pub permissions: Option<String>,
 
     /// Role color as RGB integer (use null to remove color)
