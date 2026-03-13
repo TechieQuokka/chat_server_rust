@@ -59,7 +59,7 @@ parking_lot = "0.12"
 
 # Configuration
 dotenvy = "0.15"
-config = "0.14"
+config = "0.15"
 
 # Observability
 tracing = "0.1"
